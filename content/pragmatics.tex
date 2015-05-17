@@ -1,0 +1,43 @@
+\section{Pragmatics of Dependency Management}
+
+Some principles and best practices.
+
+\subsection{Semantic Versioning}
+
+semantic versioning
+
+dynamic versioning
+
+\subsection{Separation of Project Specification and Artifact Specification}
+
+separation of library meta data specification(computer friendly, reusable components) from application project specification(programmer friendly, non-reuse)(SBT)\\
+
+{\sc Good Features of Specification}
+
+excludes in meta specification \& project specification(DSL)
+
+force in project specification
+
+specify resolvers in application project specification(Ivy separates setting file from ivy file)
+
+multiple configurations only for project specification
+
+multiple artifacts only for project specification\\
+
+{\sc Bad Features in Specification}
+
+force in meta data
+
+intransitive in artifact specification
+
+conflict management \& overrides in meta data specification
+
+specify resolvers in library meta data specification
+
+multiple configurations in artifact specification
+
+multiple artifacts in artifact specification
+
+\subsection{Lock file for project specification}
+
+Lock file is a kind of cache
