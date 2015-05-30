@@ -1,11 +1,249 @@
-\section{Implementation of SAT Solver}
+\section{Dependency Management through SAT Solvers}
 
-\subsection{Introduction of SAT solver}
+In this section, I'll describe in detail how to encode a dependency resolution problem as a SAT problem. I'll especially focus on important practical issues, such as how to select the optimal solutions and how to report friendly errors.
 
-\subsection{Encoding of Dependency}
+\subsection{Formalism}
 
-\subsection{Encoding of Conflicts}
+Formalization of the problem based on set semantics is the first step to solve the problem via SAT solvers. The formalism used here is based on the work of Mancinelli et al.\cite{mancinelli2006managing}, and the encoding tricks are based on the work of Berre et al. \cite{berre2009dependency}.
 
-\subsection{Choose the Optimal Solution}
+There is a big disparity between the concepts in the Maven ecosystem and the Ivy ecosystem. For example, a package in Maven is very different from a package in Ivy. In Maven, a package is the same as an artifact, but in Ivy a package may define several artifacts.
 
-\subsection{Friendly Error Message Display}
+The difference can be abstracted away for the purpose of dependency management based on following two concepts.
+
+\begin{definition}[Library]
+  A library is a unique entity which can be versioned.  The versioning of a library should be a total-order. In the Java world, a library is usually identified by the pair $(group, name)$.
+\end{definition}
+
+\begin{definition}[Package]
+  A package is a versioned library. Two packages of the same library but of different versions conflict.  A package can be denoted as a pair $(l, v)$.
+\end{definition}
+
+% \subsubsection{Fuzzy Constraints}
+
+\noindent
+\textbf{Fuzzy Constraints}. It's possible to specify fuzzy constraints both in Maven and Ivy. For example, a package $p$ may dependent on $x(\geq 2.3)$. To encode the fuzzy constraints, we can expand $x(\geq 2.3)$ to a set of  concrete packages, such as $\{x_1, x_2, x_3, ...\}$.
+
+Following the approach above, it's possible to encode the direct dependency constraints of any package as a set of set of packages. This insight enables us to formalize the concept \emph{repository}\cite{mancinelli2006managing}.
+
+\begin{definition}[Repository]
+  A repository is a tuple $R = (P, D, C)$ where $P$ is a set of packages, $D : P \rightarrow \mathscr{P p 1}(\mathscr{P p 1}(P))$ is the dependency function\footnote{$\mathscr{P p 1}(X)$ represents the set of subsets of X.}, and $C \subset P \times P$ is the conflict relation. The repository must satisfy the following conditions:
+
+  \begin{itemize}
+  \item The relation $C$ is symmetric, i.e., $(\pi_1, \pi_2) \in C$ if and only if $(\pi_2, \pi_1) \in C$ for all $\pi_1, \pi_2 \in C$.
+  \item Two packages with the same unit but different versions conflict, i.e., if $\pi_1 = (l, v_1)$ and $\pi_2 = (l, v_2)$ with $v_1 \neq v_2$, then $(\pi_1, \pi_2) \in C$.
+  \end{itemize}
+\end{definition}
+
+In a repository $R = (P, D, C)$, the dependencies of each package $p$ are given by $D(p) = \{d_1, ..., d_k\}$, which is a set of sets of packages. It means if $p$ is to be used, then all its $k$ dependency requirements must be satisfied. For the constraint $d_i$ to be satisfied, at least one of the packages in $d_i$ must be used as well.
+
+For example, if $D(p) = \{\{a_1, ..., a_k\}, \{c_1, ..., c_j\}\}$, then in order to use $p$, exactly one package in $\{a_1, ..., a_k\}$ and one in $\{c_1, ..., c_j\}$ must be used.
+
+Now we can formalize the concept \emph{resolution}.
+
+\begin{definition}[Resolution]
+  A resolution for the initial package $\pi$ with regard to a repository $R = (P, D, C)$ is a subset $I$ of $P$. The resolution must satisfy following conditions:
+
+  \begin{itemize}
+  \item \emph{Inclusion}: The initial package is in the resolution. Formally, $\pi \in I$.
+  \item \emph{Abundance}: Every package has what it needs. Formally, for every $\pi \in I$, and for every dependency $d \in D(\pi)$ we have $I \cap d \neq \emptyset$.
+  \item \emph{Peace}: No two packages conflict. Formally, $(I \times I) \cap C = \emptyset$.
+  \end{itemize}
+\end{definition}
+
+Note that a resolution may not always exist. There could be conflicts or missing dependencies.
+
+\subsection{Algorithm Overview}
+
+The resolution algorithm consists of two independent algorithms:
+
+\begin{enumerate}
+\item An algorithm to construct a local repository based on the transitivity of dependency.
+\item An algorithm to use a SAT solver to find an optimal solution on the local repository.
+\end{enumerate}
+
+The first algorithm, which I call the \emph{closure construction algorithm}, recursively constructs a repository whose packages are the transitive closure of the initial constraints. In the process of constructing the local repository, it has to handle particular features of Maven and Ivy, such as \emph{fuzzy constraints}, \emph{excludes}, \emph{intransitive dependencies}, \emph{forces}, \emph{scopes} or \emph{configurations}. We need two versions of the algorithm here, one for Maven and one for Ivy.
+
+The second algorithm, which I call the \emph{encoding algorithm}, encodes the local repository to the format of a specific SAT solver, and decodes the result to a user-friendly format. We only need one version of this algorithm, as it is based on the abstract concept of \emph{library} and \emph{package} we defined above.
+
+%% \begin{figure}
+%%   \centering
+%%   \begin{tikzpicture}[every node/.style={rectangle, draw, font=\small, text centered, node distance=4cm}]
+%%     \node (initial) {Initial Constraints};
+%%     \node [right of=initial] (closure) {Closure Repository};
+%%     \node [right of=closure] (result) {Resolution Result};
+
+%%     \graph [grow right=3cm] {
+%%       (initial) -> (closure) -> (result)
+%%     };
+%%   \end{tikzpicture}
+%%   \centering
+%%   \caption{Algorithm Process Overview}
+%%   \label{fig:sat:overview}
+%% \end{figure}
+
+\subsection{Closure Construction Algorithm}
+
+The closure construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository, which is defined as follows.
+
+\begin{definition}[Flattened Dependency Graph]
+  The flattened dependency graph $G = (N, E)$ for a repository $R = (P, D, C)$ is a directed graph, where the nodes are the packages, and the arcs are the dependency between two packages. Formally, $N = P$, and $E = \{ (p, q) | \exists d_i \in D(p) \land q \in d_i\}$.
+\end{definition}
+
+Note that there could be cycles in the graph. Following example demonstrates how cycles could arise in practice.
+
+\begin{verbatim}
+(x, 2.3) has constraint y(>=1.3)
+(y, 1.4) has constraint x(>=2.1)
+\end{verbatim}
+
+It's obvious that in the example above, there is an arc from $(x, 2.3)$ to $(y, 1.4)$, because $(y, 1.4) \in \{(y, v) | v \geq 1.3 \}$. For similar reasons, there's an arc from $(y, 1.4)$ to $(x, 2.3)$. Thus, in this case there's a cycle in the flattened dependency graph.
+
+The existence of cycles in the graph implies that the algorithm should keep track of visited nodes in order to avoid infinite loops.
+
+The algorithm is implemented as a recursive function in Scala, which has following signature:
+\begin{lstlisting}[language=Scala]
+  // Maven
+  def resolve(pom: MDescriptor, scope: Scope,
+               excludes: Iterable[LibT], path: Set[PackageT]): Unit
+  // Ivy
+  def resolve(ivy: IDescriptor, confs: Set[String],
+               excludes: Seq[IExclude], path: Set[PackageT]): Unit
+\end{lstlisting}
+
+The algorithm starts from the initial package, and advances following the depth-first-search approach on the flattened dependency graph of the closure repository. In the visiting process, the algorithm updates two mutable data structures $packagesMap$ and $librariesMap$:
+
+\begin{lstlisting}[language=Scala]
+  // Maven
+  type DependenciesT = Set[(MDependency, Set[MPackage])]
+
+  val packagesMap = new TrieMap[MPackage, DependenciesT]
+  val librariesMap = new TrieMap[ILib, Set[MPackage]]
+
+  // Ivy
+  type DependenciesT = Set[(IDependency, Set[IPackage])]
+
+  case class PackageInfo(dependencies: DependenciesT, descriptor: IDescriptor,
+                          activeConfs: Set[String], activeArtifacts: Set[String])
+
+  val packagesMap = new TrieMap[IPackage, PackageInfo]
+  val librariesMap = new TrieMap[ILib, Set[IPackage]]
+\end{lstlisting}
+
+Compared to the repository triple $R = (P, D, C)$, the structure $packagesMap$ is the representation of the dependency function $D$, and as $P$ is the domain of $D$, thus is represented by the keys of $packagesMap$. The structure $librariesMap$ is a representation of conflicts $C$. Additional information is maintained in $packagesMap$ for more friendly resolution report.
+
+In the following, I introduce in detail how the particular feature of Maven or Ivy are handled by the \emph{closure construction algorithm}.
+
+\subsubsection{Fuzzy Constraints}
+
+Fuzzy constraints are expanded to individual packages as mentioned before. To handle a fuzzy constraint $L(pred)$, the algorithm first retrieves a list of all versions of the library $L$, then select valid versions by the constraint predicate $pred$.
+
+In Scala, the relevant code snippet is as follows:
+
+\begin{lstlisting}[language=Scala]
+  // Maven
+  metaResolver(dep.lib).map(dep.filterVersions)
+
+  // Ivy
+  versionsResolver(dep.lib).map(dep.filterVersions)
+\end{lstlisting}
+
+\subsubsection{Intransitive Constraints}
+
+Ivy supports intransitive dependencies. To support this feature, only advance the depth-first-search if current dependency is transitive. In Scala, we only need to add a conditional check before recursive call:
+
+\begin{lstlisting}[language=Scala]
+  if (dep.transitive)
+      resolve(descriptor, depConfs, newExcludes, path + ivy.pkg)
+\end{lstlisting}
+
+\subsubsection{Scopes or Configurations}
+
+Maven supports \emph{scopes}, Ivy supports a similar but more flexible concept \emph{configurations}. To support this feature, they are added to the signature of the recursive function:
+
+\begin{lstlisting}[language=Scala]
+  // Maven
+  def resolve(pom: MDescriptor, scope: Scope, ...): Unit = {
+    val deps = pom.filterDependencies(scope, excludes)
+    deps.foreach { dep =>
+      val newScope = COMPILE
+      // ...
+    }
+  }
+
+  // Ivy
+  def resolve(ivy: IDescriptor, confs: Set[String], ...): Unit = {
+    val deps = ivy.filterDependencies(confs, excludes)
+    deps.foreach { dep =>
+      val newConfs = ivy.filterDepConfigurations(confs, dep)
+      // ...
+    }
+  }
+\end{lstlisting}
+
+The first line in the body of the function filters the effective dependencies according to the semantics of scope and configurations.
+
+For Maven, the new scope is always \emph{compile}, because Maven scopes are fixed, and it doesn't make sense for one package to depend on scopes other than \emph{compile} of another package.
+
+For Ivy, the new configurations are calculated for each dependency according to the dependency mapping of configurations defined in the descriptor.
+
+\subsubsection{Excludes}
+
+Both Maven and Ivy support excludes in dependency. This feature complicates the \emph{closure construction algorithm}. Ideally, each package in the \emph{flatten dependency graph} is visited once. However, the effective scope of excludes is along the transitive chain, it's possible that for a dependency $d$ of a package $\pi$, it's excluded in one chain, but included in another chain. This is illustrated by following graph:
+
+\begin{verbatim}
+p   ->(exclude=t)  h(deps={t(>2.1)})
+q   ->  h(deps={t(>2.1)})
+\end{verbatim}
+
+In the example above, the dependency path from $p$ to $h$ excludes the library $t$, while the dependency path from $q$ to $h$ includes $t$. This implies we should allow each package to be visited multiple times along different paths, and the dependencies of different paths should be added together by set union operation.
+
+The parameter \emph{path} in the signature represents the visited path. The parameter \emph{excludes} represents the effective excludes.
+
+\begin{lstlisting}[language=Scala]
+  // Maven
+  def resolve(pom: MDescriptor, scope: Scope,
+               excludes: Iterable[LibT], path: Set[PackageT]): Unit
+  // Ivy
+  def resolve(ivy: IDescriptor, confs: Set[String],
+               excludes: Seq[IExclude], path: Set[PackageT]): Unit
+\end{lstlisting}
+
+Inside the function body, the excludes are used to filter effective dependencies. Both the \emph{exludes} and \emph{path} are accumulated along the visited path, but different paths don't influence each other.
+
+\subsection{Encoding Algorithm}
+
+The encoding algorithm depends on an abstract repository which has following signature:
+
+\begin{lstlisting}[language=Scala]
+  abstract class Repository { outer =>
+    type LibT   <: Lib
+    type PackageT    <: Package { type LibT = outer.LibT }
+    type DependencyT <: Dependency { type LibT = outer.LibT }
+
+    /** Returns the root package for the repository
+    */
+    def root: PackageT
+
+    /** Returns the packages that p depends on directly
+    */
+    def apply(p: PackageT): Iterable[(DependencyT, Iterable[PackageT])]
+
+    /** Returns all packages in the repository, except the root
+    */
+    def packages: Iterable[PackageT]
+
+    /** Returns all primitive conflicts in the repository
+    */
+    def conflicts: Map[LibT, Set[PackageT]]
+  }
+\end{lstlisting}
+
+\subsubsection{Encode Root Dependency}
+
+\subsubsection{Encode Dependency}
+
+\subsubsection{Encode Conflicts}
+
+\subsubsection{Choose the Optimal Solution}
+
+\subsubsection{Friendly Error Message Display}
