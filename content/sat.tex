@@ -259,10 +259,14 @@ Generally, for a package $p$ with $D(p) = \{ d_1, d_2, ..., d_n\}$ and $d_i = \{
 p \rightarrow \bigwedge_{1 \leq i \leq n} \bigvee_{1 \leq j \leq m_i} q_{i,j}
 \]
 
-Some SAT solvers might require the input as \emph{conjunctive normal form}, which is transformed below:
+Some SAT solvers require the input as \emph{conjunctive normal form}, which can be derived as follows:
 
 \[
-\bigwedge_{1 \leq i \leq n} p \rightarrow \bigvee_{1 \leq j \leq m_i} q_{i,j} \quad \quad \equiv \quad \quad \bigwedge_{1 \leq i \leq n} (\neg p \vee \bigvee_{1 \leq j \leq m_i} q_{i,j})
+p \rightarrow \bigwedge_{1 \leq i \leq n} \bigvee_{1 \leq j \leq m_i} q_{i,j}
+\quad \quad \equiv \quad \quad
+\bigwedge_{1 \leq i \leq n} p \rightarrow \bigvee_{1 \leq j \leq m_i} q_{i,j}
+\quad \quad \equiv \quad \quad
+\bigwedge_{1 \leq i \leq n} (\neg p \vee \bigvee_{1 \leq j \leq m_i} q_{i,j})
 \]
 
 If the package $p$ is the root package, it's always required. Thus the dependency of the root package can be encoded by dropping the implication:
@@ -284,16 +288,6 @@ A slightly different encoding is based on the fact that all package conflicts in
 \[
 (\sum_{p \in CL(L)} p) \leq 1
 \]
-
-
-%% That's why the repository exposes an interface to allow users to retrieve all versions of a library in the repository.
-
-%% \begin{lstlisting}[language=Scala]
-%%   abstract class Repository { outer =>
-%%     /** Returns all primitive conflicts in the repository */
-%%     def conflicts: Map[LibT, Set[PackageT]]
-%%   }
-%% \end{lstlisting}
 
 In the implementation, the second approach is taken. Unlike the comment in \cite{berre2009dependency}, which thinks the second approach is superior for error reporting, we observed no such advantage in our implementation. We take the second approach mainly because it makes logical translation simpler.
 
@@ -325,4 +319,4 @@ An elegant algorithm to compute MUS is QuickXplain\cite{junker2004quickxplain}. 
 
 To deal with the second requirement, we need to relate each translated logical formula to the original dependency in the repository. When the SAT solver produces MUS, we are sure that the dependencies that correspond to the formulas must form paths from the root package to the place where missing dependencies or conflicts happen. Otherwise, it's possible to show the the set of unsatisfiable subformula is not minimal, which is a contradiction.
 
-Based on this observation, in the implementation we are able to organize the missing dependencies or conflicts as a tree from the root package to the level where the error happens, which makes it clear to end users how the root dependencies lead to errors transitively.
+Based on this observation, we are able to display the missing dependencies or conflicts as a tree from the root package to the level where the error happens, which makes it clear to end users how the root dependencies lead to errors transitively.
