@@ -4,7 +4,7 @@ In this section, I'll describe in detail how to encode a dependency resolution p
 
 \subsection{Formalism}
 
-Formalization of the problem based on set semantics is the first step to solve the problem via SAT solvers. The formalism used here is based on the work of Mancinelli et al.\cite{mancinelli2006managing}, and the encoding tricks are based on the work of Berre et al. \cite{berre2009dependency}.
+Formalization of the problem based on set semantics is the first step to solve the problem via SAT solvers. The formalism used here is based on the work of Mancinelli et al.\cite{mancinelli2006managing}.
 
 There is a big disparity between the concepts in the Maven ecosystem and the Ivy ecosystem. For example, a package in Maven is very different from a package in Ivy. In Maven, a package is the same as an artifact, but in Ivy a package may define several artifacts.
 
@@ -36,7 +36,7 @@ Following the approach above, it's possible to encode the direct dependency cons
 
 In a repository $R = (P, D, C)$, the dependencies of each package $p$ are given by $D(p) = \{d_1, ..., d_k\}$, which is a set of sets of packages. It means if $p$ is to be used, then all its $k$ dependency requirements must be satisfied. For the constraint $d_i$ to be satisfied, at least one of the packages in $d_i$ must be used as well.
 
-For example, if $D(p) = \{\{a_1, ..., a_k\}, \{c_1, ..., c_j\}\}$, then in order to use $p$, exactly one package in $\{a_1, ..., a_k\}$ and one in $\{c_1, ..., c_j\}$ must be used.
+For example, if $D(p) = \{\{a_1, ..., a_k\}, \{c_1, ..., c_j\}\}$, then in order to use $p$, at least one package in $\{a_1, ..., a_k\}$ and one in $\{c_1, ..., c_j\}$ must be used.
 
 Now we can formalize the concept \emph{resolution}.
 
@@ -65,22 +65,6 @@ The first algorithm, which I call the \emph{closure construction algorithm}, rec
 
 The second algorithm, which I call the \emph{encoding algorithm}, encodes the local repository to the format of a specific SAT solver, and decodes the result to a user-friendly format. We only need one version of this algorithm, as it is based on the abstract concept of \emph{library} and \emph{package} we defined above.
 
-%% \begin{figure}
-%%   \centering
-%%   \begin{tikzpicture}[every node/.style={rectangle, draw, font=\small, text centered, node distance=4cm}]
-%%     \node (initial) {Initial Constraints};
-%%     \node [right of=initial] (closure) {Closure Repository};
-%%     \node [right of=closure] (result) {Resolution Result};
-
-%%     \graph [grow right=3cm] {
-%%       (initial) -> (closure) -> (result)
-%%     };
-%%   \end{tikzpicture}
-%%   \centering
-%%   \caption{Algorithm Process Overview}
-%%   \label{fig:sat:overview}
-%% \end{figure}
-
 \subsection{Closure Construction Algorithm}
 
 The closure construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository, which is defined as follows.
@@ -92,8 +76,8 @@ The closure construction algorithm is basically a depth-first-search(DFS) algori
 Note that there could be cycles in the graph. Following example demonstrates how cycles could arise in practice.
 
 \begin{verbatim}
-(x, 2.3) has constraint y(>=1.3)
-(y, 1.4) has constraint x(>=2.1)
+(x, 2.3) depends on y(>=1.3)
+(y, 1.4) depends on x(>=2.1)
 \end{verbatim}
 
 It's obvious that in the example above, there is an arc from $(x, 2.3)$ to $(y, 1.4)$, because $(y, 1.4) \in \{(y, v) | v \geq 1.3 \}$. For similar reasons, there's an arc from $(y, 1.4)$ to $(x, 2.3)$. Thus, in this case there's a cycle in the flattened dependency graph.
@@ -149,7 +133,7 @@ In Scala, the relevant code snippet is as follows:
 
 \subsubsection{Intransitive Constraints}
 
-Ivy supports intransitive dependencies. To support this feature, only advance the depth-first-search if current dependency is transitive. In Scala, we only need to add a conditional check before recursive call:
+Ivy supports intransitive dependencies. To support this feature, only advance the depth-first-search if current dependency is transitive. In Scala, we only need to add a conditional check before the recursive call:
 
 \begin{lstlisting}[language=Scala]
   if (dep.transitive)
@@ -188,14 +172,14 @@ For Ivy, the new configurations are calculated for each dependency according to 
 
 \subsubsection{Excludes}
 
-Both Maven and Ivy support excludes in dependency. This feature complicates the \emph{closure construction algorithm}. Ideally, each package in the \emph{flatten dependency graph} is visited once. However, the effective scope of excludes is along the transitive chain, it's possible that for a dependency $d$ of a package $\pi$, it's excluded in one chain, but included in another chain. This is illustrated by following graph:
+Both Maven and Ivy support excludes in dependency. This feature complicates the \emph{closure construction algorithm}. Ideally, each package in the \emph{flatten dependency graph} is visited once. However, the effective scope of excludes is along the transitive chain, it's possible that for a dependency $d$ of a package $\pi$, it's excluded in one chain, but included in another chain. This is illustrated by following example:
 
 \begin{verbatim}
-p   ->(exclude=t)  h(deps={t(>2.1)})
-q   ->  h(deps={t(>2.1)})
+p   depends on(exclude=t)   h(deps={t(>2.1)})
+q   depends on   h(deps={t(>2.1)})
 \end{verbatim}
 
-In the example above, the dependency path from $p$ to $h$ excludes the library $t$, while the dependency path from $q$ to $h$ includes $t$. This implies we should allow each package to be visited multiple times along different paths, and the dependencies of different paths should be added together by set union operation.
+In the example above, the dependency path from $p$ to $h$ excludes the library $t$, while the dependency path from $q$ to $h$ includes $t$. This implies we should allow each package to be visited multiple times along different paths, and the dependencies of different paths should be added together by the set union operation.
 
 The parameter \emph{path} in the signature represents the visited path. The parameter \emph{excludes} represents the effective excludes.
 
@@ -208,11 +192,34 @@ The parameter \emph{path} in the signature represents the visited path. The para
                excludes: Seq[IExclude], path: Set[PackageT]): Unit
 \end{lstlisting}
 
-Inside the function body, the excludes are used to filter effective dependencies. Both the \emph{exludes} and \emph{path} are accumulated along the visited path, but different paths don't influence each other.
+Inside the function body, the excludes are used to filter effective dependencies. Both the \emph{exludes} and \emph{path} are accumulated along the visited path, but different paths don't interfere with each other.
+
+\subsubsection{Overrides}
+
+Ivy supports specifying an override mediation rule, overriding the revision requested for a transitive dependency. This feature can be useful when a direct dependency is bringing a transitive dependency for which you want to change the revision, without actually declaring a dependency on it (because the module doesn't actually depend on it).
+
+Current implementation doesn't support this feature, but technically it's not very different from the support of \emph{excludes}, which is also effective and accumulative along the transitive dependency chain.
+
+When interpreting a dependency constraint $L(pred)$, the algorithm should first check if the library $L$ is covered in the \emph{overrides} set. If it's, then the version constraint $pred$ should be replaced by the version constraint specified in the override rules.
+
+In case where there are two override rules on the transitive dependency chain about the same library, the override rule closer to the root package has higher precedence.
+
+\subsubsection{Force}
+
+Ivy supports a boolean flat \emph{force} on a dependency constraint, which says that this dependency
+should be forced to the specified revision. The effective scope of \emph{force} is global\footnote{Ivy documentation is obscure about this point, but that seems to be the only reasonable interpretation. \\\url{http://ant.apache.org/ivy/history/latest-milestone/ivyfile/dependency.html}} -- instead of being along the transitive dependency chain -- it means if a specific version of a library $L$ is forced, it has to override all dependencies on $L$ for every package in the repository.
+
+The global effective scope of \emph{force} implies we should do post-processing on the dependencies of each package in order to make \emph{force} effective. If there are multiple \emph{forces} on the same library, then it's up to the solver to select one from them -- usually the latest version is chosen.
+
+This feature has not been implemented yet. But given the semantics above, it's not hard to implement this feature by keeping track of all forces during graph traversal, and then do post-update on dependencies of forced libraries for each package.
+
+%% \subsubsection{Conflict Manager}
+
+%% Ivy supports conflict manager.
 
 \subsection{Encoding Algorithm}
 
-The encoding algorithm depends on an abstract repository which has following signature:
+Once the local repository has been constructed, the \emph{encoding algorithm} can encode the repository into a SAT problem and call a SAT solver to find a resolution. The encoding algorithm depends on an abstract representation of repository, which has following signature:
 
 \begin{lstlisting}[language=Scala]
   abstract class Repository { outer =>
@@ -220,30 +227,102 @@ The encoding algorithm depends on an abstract repository which has following sig
     type PackageT    <: Package { type LibT = outer.LibT }
     type DependencyT <: Dependency { type LibT = outer.LibT }
 
-    /** Returns the root package for the repository
-    */
+    /** Returns the root package of the repository */
     def root: PackageT
 
-    /** Returns the packages that p depends on directly
-    */
+    /** Returns the packages that p depends on directly */
     def apply(p: PackageT): Iterable[(DependencyT, Iterable[PackageT])]
 
-    /** Returns all packages in the repository, except the root
-    */
+    /** Returns all packages in the repository, except the root */
     def packages: Iterable[PackageT]
 
-    /** Returns all primitive conflicts in the repository
-    */
+    /** Returns all primitive conflicts in the repository */
     def conflicts: Map[LibT, Set[PackageT]]
   }
 \end{lstlisting}
 
-\subsubsection{Encode Root Dependency}
+This abstract interface enables us to use the same encoding algorithm for both Maven and Ivy. In the following I'll explain in detail how to encode the repository into a SAT problem. The encoding tricks are based on the work of Berre et al. \cite{berre2009dependency}.
+
+In the implementation, SAT4J Pseudo\footnote{\url{http://www.sat4j.org}} version $2.3.4$ is used. In the following, I'll keep the introduction abstract, so that it's possible to switch to other SAT solvers following the tricks introduced here. For readers interested in the details of encoding the problem in SAT4J, please refer to the code base on Github\footnote{\url{https://github.com/liufengyun/bacala/blob/master/src/main/scala/bacala/alg/SatSolver.scala}}.
 
 \subsubsection{Encode Dependency}
 
+Remember that in our formalism of a repository $R = (P, D, C)$, the dependency of a package $p$ is like $D(p) = \{\{a_1, ..., a_k\}, \{c_1, ..., c_j\}\}$. It means in order to use $p$, at least one package in $\{a_1, ..., a_k\}$ and one in $\{c_1, ..., c_j\}$ must be used. This naturally translates to following logical formula:
+
+\[
+p \rightarrow ((a_1 \vee ... \vee a_k) \wedge (c_1 \vee ... \vee c_j))
+\]
+
+Generally, for a package $p$ with $D(p) = \{ d_1, d_2, ..., d_n\}$ and $d_i = \{ q_{i, j} | i \leq j \leq m_i \}$, it can be encoded as following logical formula:
+
+\[
+p \rightarrow \bigwedge_{1 \leq i \leq n} \bigvee_{1 \leq j \leq m_i} q_{i,j}
+\]
+
+Some SAT solvers might require the input as \emph{conjunctive normal form}, which is transformed below:
+
+\[
+\bigwedge_{1 \leq i \leq n} p \rightarrow \bigvee_{1 \leq j \leq m_i} q_{i,j} \quad \quad \equiv \quad \quad \bigwedge_{1 \leq i \leq n} (\neg p \vee \bigvee_{1 \leq j \leq m_i} q_{i,j})
+\]
+
+If the package $p$ is the root package, it's always required. Thus the dependency of the root package can be encoded by dropping the implication:
+
+\[
+\bigwedge_{1 \leq i \leq n} \bigvee_{1 \leq j \leq m_i} q_{i,j}
+\]
+
 \subsubsection{Encode Conflicts}
+
+For given a repository $R = (P, D, C)$, the conflicts $C$ is a set of pairs like $(p, q)$. A natural approach to encode the conflict pair $(p, q)$ as $\neg p \vee \neg q$. Then all conflicts in the repository can be encoded as following formula:
+
+\[
+\bigwedge_{(p, q) \in C} \neg p \vee \neg q
+\]
+
+A slightly different encoding is based on the fact that all package conflicts in software development are due to version conflicts on the same library. Suppose the function $CL(L)$ returns all versions of the library $L$ in the repository, then it's possible to encode the conflict on library $L$ as a cardinality constraint\footnote{Cardinality constraint is supported by all major SAT solvers}:
+
+\[
+(\sum_{p \in CL(L)} p) \leq 1
+\]
+
+
+%% That's why the repository exposes an interface to allow users to retrieve all versions of a library in the repository.
+
+%% \begin{lstlisting}[language=Scala]
+%%   abstract class Repository { outer =>
+%%     /** Returns all primitive conflicts in the repository */
+%%     def conflicts: Map[LibT, Set[PackageT]]
+%%   }
+%% \end{lstlisting}
+
+In the implementation, the second approach is taken. Unlike the comment in \cite{berre2009dependency}, which thinks the second approach is superior for error reporting, we observed no such advantage in our implementation. We take the second approach mainly because it makes logical translation simpler.
 
 \subsubsection{Choose the Optimal Solution}
 
-\subsubsection{Friendly Error Message Display}
+There could be multiple resolutions for a given repository. In that case, an optimal solution should be chosen. In the context of software package dependency management, new versions of a library are preferred over old versions of a library, so the solver should favor the solution which contains the newest versions of libraries.
+
+SAT4J supports setting a \emph{pseudo-boolean function} to minimize for resolution. The objective function has following form:
+
+\[
+\sum_{p \in P} w_p p
+\]
+
+So the problem becomes \emph{how to define the weight for each package $p$ in the repository}. The approach we take is rank-based weight. For each library, we rank all versions of the library in the repository, newer versions get lower ranks. Then we use the rank of a package for its weight in the objective function.
+
+This approach works well in our experiment, and it's better than approaches that depend on version numbers, as the latter are prone to version skew, where the library has large version numbers will be dominating in the objective function. The rank-based approach can be seen as having performed a normalization step on the version numbers.
+
+\subsubsection{Report Friendly Error Message}
+
+In case there's no solution for a given repository, the algorithm should report friendly error messages to end users. Here there are two problems related to usability.
+
+First, as each library has several candidate versions in the repository, when there's no solution available, there're many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach is to choose the minimal combination of packages where this is no solution.
+
+Second, as conflicts or missing dependencies can happen very deep in the graph, just reporting these errors will confuse end users, as these packages are not directly required by the root package. A friendly error report should relate the missing dependencies or conflicts to the root dependencies.
+
+From the logical point view, the first problem is equivalent to find the minimal subset $T$ of the total formulas $S$ that cannot be satisfied altogether. This subset of formulas is also called MUS(\emph{minimal unsatisfiable subformula}). Formally, $T$ is MUS of $S$ if and only if $T \subseteq S$, $T \vDash \perp$ and $\nexists R \subset T \wedge R \vDash \perp$.
+
+An elegant algorithm to compute MUS is QuickXplain\cite{junker2004quickxplain}. The algorithm has the merit that it doesn't require any change to the SAT solver. QuickXplain works by translate the constraints $S = \{ s_1, ..., s_n\}$ into $S'$ by adding a new selector variable $sel_i$ to each constraint in $S: S' = \{ sel_1 \vee s_1, ..., sel_n \vee s_n\}$. Then the problem is transformed into a pseudo-boolean problem to minimize the objective function $\sum_{1 \leq i \leq n} sel_i$ under the constraint $S' \bigwedge_{1 \leq i \leq n} \neg sel_i$, which can be readily solved by existent SAT solvers.
+
+To deal with the second requirement, we need to relate each translated logical formula to the original dependency in the repository. When the SAT solver produces MUS, we are sure that the dependencies that correspond to the formulas must form paths from the root package to the place where missing dependencies or conflicts happen. Otherwise, it's possible to show the the set of unsatisfiable subformula is not minimal, which is a contradiction.
+
+Based on this observation, in the implementation we are able to organize the missing dependencies or conflicts as a tree from the root package to the level where the error happens, which makes it clear to end users how the root dependencies lead to errors transitively.
