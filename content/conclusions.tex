@@ -1,12 +1,12 @@
 \section{Conclusion}
 
-Our project has shown that usage of SAT solvers for dependency management is not only theoretically possible, but also practically feasible. The new algorithm based on SAT solvers produce more correct answers. And the algorithm can report user-friendly message as a dependency tree when there is missing dependency or conflict.
+Our project has shown that usage of SAT solvers for dependency management is not only theoretically possible, but also practically feasible. The new algorithm based on SAT solvers produce more correct answers. And the algorithm can report the error as a dependency tree when there is missing dependency or conflict, which makes it clear to end users how the root dependencies lead to the error transitively.
 
-Regarding performance, with the POM and Ivy files we tested, the SAT resolver never takes more than one second. The largest Maven file we tested has 46 packages in the solution set, and it took 0.17 second on SAT solver, 68.4 seconds in downloading POM files. With local file system caching of POM files, the cost of network IO drops to zero after the first run on the project.
+The algorithm is practically fast enough, which makes it an ideal candidate for improving existing dependency management tools.
 
 \subsection{Future Work}
 
-In the new resolution algorithm, the time spent on network IO is dominating, the time spent on SAT solver is insignificant. If the POM or Ivy files are local, the algorithm would be extremely fast.
+As we've seen, in the new resolution algorithm, the time spent on network IO is dominating, the time spent on SAT solver is insignificant. If the POM or Ivy files are local, the algorithm would be extremely fast.
 
 This implies we can use a central server for dependency resolution. The client sends the dependency specification to the server, the algorithm runs and sends the resolution result back to the client. The client side only needs to download artifacts from repositories.
 

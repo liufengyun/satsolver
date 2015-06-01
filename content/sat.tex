@@ -315,4 +315,10 @@ An elegant algorithm to compute MUS is QuickXplain\cite{junker2004quickxplain}. 
 
 To deal with the second requirement, we need to relate each translated logical formula to the original dependency in the repository. When the SAT solver produces MUS, we are sure that the dependencies that correspond to the formulas must form paths from the root package to the place where missing dependencies or conflicts happen. Otherwise, it's possible to show the the set of unsatisfiable subformula is not minimal, which is a contradiction.
 
-Based on this observation, we are able to display the missing dependencies or conflicts as a tree from the root package to the level where the error happens, which makes it clear to end users how the root dependencies lead to errors transitively.
+Based on this observation, we are able to display the missing dependencies or conflicts as a tree from the root package to the level where the error happens, which makes it clear to end users how the root dependencies lead to the error transitively.
+
+\subsection{Performance}
+
+With the POM and Ivy files we tested, the SAT resolver never takes more than one second. The largest Maven file we tested has 46 packages in the solution set, and it took 0.17 second on SAT solver, 68.4 seconds in downloading POM files. With local file system caching of POM files, the cost of network IO drops to zero after the first run on the project.
+
+When all the POM and Ivy files are cached locally, the new algorithm is about 30 times faster than Maven and Ivy.
