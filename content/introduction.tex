@@ -40,6 +40,8 @@ It's obvious that the dependency graph in Figure \ref{fig:introuction:underconst
   All over this traversal, conflict management is done to prevent access to a module as soon as possible.
 \end{quote}
 
+The popular build tool Gradle\footnote{\url{https://gradle.org}} has the similar problem, as documented in section \emph{50.7. How dependency resolution works} on their official site\footnote{\url{https://docs.gradle.org/current/userguide/dependency_management.html}}.
+
 In Scala, sbt\footnote{\url{http://www.scala-sbt.org}} depends on Ivy to resolve dependencies, so it inherits the problem. It produces confusing resolution results to users sometimes. The motivation for this project is to experiment with a new algorithm based on SAT solvers to avoid this problem. If proved feasible, sbt can drop the dependency on Ivy and use the new algorithm in the future to avoid the problem.
 
 \subsection{Contributions of the project}

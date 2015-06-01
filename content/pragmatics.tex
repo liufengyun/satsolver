@@ -1,43 +1,66 @@
 \section{Pragmatics of Dependency Management}
 
-Some principles and best practices.
+To elegantly solve the software dependency problem and avoid dependency hell, it requires not only good resolution algorithms, but also good practices. For example, \emph{semantic versioning}\footnote{\url{http://semver.org}} is widely recognized to be a good practice in versioning packages.
 
-\subsection{Semantic Versioning}
-
-semantic versioning
-
-dynamic versioning
+In this section, I'll argue for (1) the separation of project specification and artifact specification, and (2) a restriction on the features of artifact specification. I hope this analysis will be useful for future ecosystem designers.
 
 \subsection{Separation of Project Specification and Artifact Specification}
 
-separation of library meta data specification(computer friendly, reusable components) from application project specification(programmer friendly, non-reuse)(SBT)\\
+By \emph{project specification} I mean the specification of package dependencies, repositories, etc, which is usually checked into the version control system along with the project code\footnote{It's possible to distinguish two different usage of project specification -- one for application, and one for library. They are the same in most places, but may diverge on some features. However, I'm not going to pursue the nuances between them here.}. By \emph{artifact specification} I mean the specification that locates on repository server which describes the name, version and dependencies of a reusable artifact.
 
-{\sc Good Features of Specification}
+I propose that it's good to separate project specification and artifact specification, and use different specification languages for them.
 
-excludes in meta specification \& project specification(DSL)
+The most important reason is that they target different audience. Project specifications are read and written by programmers, while artifact specifications are usually generated and read by programs. Project specifications change as the projects evolve, while artifact specifications stay the same once created. DSL is suitable for project specifications, while XML is suitable for artifact specifications. In this regard, Sbt and Gradle are on the right track.
 
-force in project specification
+Besides, project specification and artifact specification need different features. This is discussed in detail in next section.
 
-specify resolvers in application project specification(Ivy separates setting file from ivy file)
+\subsection{Evaluation of Features}
 
-multiple configurations only for project specification
+In this section, we evaluate which features are appropriate in which context. The result is summarized in Table\ref{table:prag:features}. In the following, I'm going to justify each row in the table one by one.
 
-multiple artifacts only for project specification\\
+\begin{table}
+  \center
+  \begin{tabular}{|l|c|c|}
+    \hline
+    Features              & Project Specification & Artifact Specification \\
+    \hline
+    Language              &   DSL                 & XML \\
+    Fuzzy Constraints     &   Yes                 & Yes \\
+%    Fixed Constraint      &   Yes                 & No \\
+    Resolvers             &   Yes                 & No \\
+    Force                 &   Yes                 & No \\
+    Intransitive          &   Yes                 & No \\
+    %% Substitution          &   Yes                 & No \\
+    Excludes              &   Yes                 & No \\
+    Overrides             &   Yes                 & No \\
+    Configurations        &   Yes                 & No \\
+    Multiple Artifacts    &   Yes                 & No \\
+    Build Tasks           &   Yes                 & No \\
+    \hline
+  \end{tabular}
+  \caption[Features Comparison]{Features comparison between project specification and artifact specification \label{table:prag:features}}
+\end{table}
 
-{\sc Bad Features in Specification}
+\textbf{Fuzzy Constraints}. Usage of fuzzy constraints should be encouraged, as it reduces potential version conflicts. Based on \emph{semantic versioning}, fuzzy constraint is a good feature for both project specification and artifact specification. Inversely, while usage of strict constraints(a specific version) in an application project specification can be justified, its usage in artifact specification should be discouraged, as it is prone to version conflicts.
 
-force in meta data
+\textbf{Resolvers}. A project specification may contain information about resolvers(remote repositories), but it doesn't make sense to put this information in the artifact specification, as an artifact might be placed in a lot of places and may change over time. Ivy moved resolvers to setting files, which is an improvement over Maven.
 
-intransitive in artifact specification
+\textbf{Force}. Force tells the dependency manager to use a specific version of a library even if there's conflict. It's reasonable to use this feature sometimes at the risk of the programmer in development. Usage of \emph{force} should be forbidden in artifact specification, as it imposes an unconditional decision on all projects where the package is used, which is an aggression on the freedom of projects.
 
-conflict management \& overrides in meta data specification
+\textbf{Intransitive}. Intransitive dependency doesn't make sense in artifact specification because marking a dependency as intransitive depends on some environmental assumptions. These environmental assumptions may not necessarily hold in all usages of the artifact. It can only be used in project specification at the risk of the programmer, where the environment assumptions are clear.
 
-specify resolvers in library meta data specification
+\textbf{Excludes}. Excludes tells the dependency manager to exclude dependency on a specific library. For similar reasons as \emph{intransitive}, the usage of \emph{excludes} is resolution-context-sensitive, while artifact specification should be as resolution-context-free as possible.
 
-multiple configurations in artifact specification
+\textbf{Overrides}. Overrides tells the dependency manager to use a specific version of a library for all dependencies on the library. Like \emph{excludes}, the usage of \emph{overrides} is resolution-context-sensitive, thus in can't appear in artifact specification, which is assumed to be resolution-context-free. It can only be used in project specification at the risk of the programmer, where the environment assumptions are clear.
 
-multiple artifacts in artifact specification
+\textbf{Configurations}. Project specifications may contain several different configuration, such as test, production, etc. However, it doesn't make sense to have several configurations in an artifact specification, as when an artifact is required, it's expected to behave the same in different contexts.
 
-\subsection{Lock file for project specification}
+\textbf{Multiple Artifacts}. It makes sense for a library project specification to define multiple artifacts, but it doesn't make sense for an artifact specification to specify more than one artifact, as artifact is the unit of reuse and dependency. In this regard, the design of Ivy is terrible.
 
-Lock file is a kind of cache
+\textbf{Build Tasks}. It's reasonable to define build tasks in a project specification, but it doesn't make sense to define build task inside an artifact specification, as it is useless.
+
+I think these arguments are enough to support our initial proposition. Upon inspection of real world tools, we find Sbt and Gradle are on the right track. Ivy and Maven are inadequate because they neither provide a friendly specification language nor enough features for project management, and also because they provide too many features for artifact specifications, which is problematic.
+
+%% \subsection{Lock file for project specification}
+
+%% Lock file is a kind of cache
