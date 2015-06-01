@@ -28,7 +28,7 @@ In this section, we evaluate which features are appropriate in which context. Th
     Fuzzy Constraints     &   Yes                 & Yes \\
 %    Fixed Constraint      &   Yes                 & No \\
     Resolvers             &   Yes                 & No \\
-    Force                 &   Yes                 & No \\
+    %% Force                 &   Yes                 & No \\
     Intransitive          &   Yes                 & No \\
     %% Substitution          &   Yes                 & No \\
     Excludes              &   Yes                 & No \\
@@ -45,13 +45,13 @@ In this section, we evaluate which features are appropriate in which context. Th
 
 \textbf{Resolvers}. A project specification may contain information about resolvers(remote repositories), but it doesn't make sense to put this information in the artifact specification, as an artifact might be placed in a lot of places and may change over time. Ivy moved resolvers to setting files, which is an improvement over Maven.
 
-\textbf{Force}. Force tells the dependency manager to use a specific version of a library even if there's conflict. It's reasonable to use this feature sometimes at the risk of the programmer in development. Usage of \emph{force} should be forbidden in artifact specification, as it imposes an unconditional decision on all projects where the package is used, which is an aggression on the freedom of projects.
+% \textbf{Force}. Force tells the dependency manager to use a specific version of a library even if there's conflict. It's reasonable to use this feature sometimes at the risk of the programmer in development. Usage of \emph{force} should be forbidden in artifact specification, as it imposes an unconditional decision on all projects where the package is used, which is an aggression on the freedom of projects.
 
 \textbf{Intransitive}. Intransitive dependency doesn't make sense in artifact specification because marking a dependency as intransitive depends on some environmental assumptions. These environmental assumptions may not necessarily hold in all usages of the artifact. It can only be used in project specification at the risk of the programmer, where the environment assumptions are clear.
 
 \textbf{Excludes}. Excludes tells the dependency manager to exclude dependency on a specific library. For similar reasons as \emph{intransitive}, the usage of \emph{excludes} is resolution-context-sensitive, while artifact specification should be as resolution-context-free as possible.
 
-\textbf{Overrides}. Overrides tells the dependency manager to use a specific version of a library for all dependencies on the library. Like \emph{excludes}, the usage of \emph{overrides} is resolution-context-sensitive, thus in can't appear in artifact specification, which is assumed to be resolution-context-free. It can only be used in project specification at the risk of the programmer, where the environment assumptions are clear.
+\textbf{Overrides}. Overrides tells the dependency manager to use a specific version of a library for all dependencies on the library. Like \emph{excludes}, the usage of \emph{overrides} is resolution-context-sensitive, thus in can't appear in artifact specification, which is assumed to be resolution-context-free. Usage of overrides imposes an unconditional decision on all projects where the package is used, which is an aggression on the freedom of projects. It can only be used in project specification at the risk of the programmer, where the environment assumptions are clear.
 
 \textbf{Configurations}. Project specifications may contain several different configuration, such as test, production, etc. However, it doesn't make sense to have several configurations in an artifact specification, as when an artifact is required, it's expected to behave the same in different contexts.
 
@@ -59,7 +59,7 @@ In this section, we evaluate which features are appropriate in which context. Th
 
 \textbf{Build Tasks}. It's reasonable to define build tasks in a project specification, but it doesn't make sense to define build task inside an artifact specification, as it is useless.
 
-I think these arguments are enough to support our initial proposition. Upon inspection of real world tools, we find Sbt and Gradle are on the right track. Ivy and Maven are inadequate because they neither provide a friendly specification language nor enough features for project management, and also because they provide too many features for artifact specifications, which is problematic.
+I think these arguments are enough to support our initial proposition. Upon inspection of real world tools, we find Sbt and Gradle are on the right track. Ivy and Maven are inadequate because they don't provide a friendly project specification language for programmers, and also because they provide too many features for artifact specifications, which is problematic.
 
 %% \subsection{Lock file for project specification}
 
