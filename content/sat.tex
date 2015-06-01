@@ -23,7 +23,7 @@ The difference can be abstracted away for the purpose of dependency management b
 \noindent
 \textbf{Fuzzy Constraints}. It's possible to specify fuzzy constraints both in Maven and Ivy. For example, a package $p$ may dependent on $x(\geq 2.3)$. To encode the fuzzy constraints, we can expand $x(\geq 2.3)$ to a set of  concrete packages, such as $\{x_1, x_2, x_3, ...\}$.
 
-Following the approach above, it's possible to encode the direct dependency constraints of any package as a set of set of packages. This insight enables us to formalize the concept \emph{repository}\cite{mancinelli2006managing}.
+Following the approach above, it's possible to encode the direct dependency constraints of any package as a set of sets of packages. This insight enables us to formalize the concept \emph{repository}\cite{mancinelli2006managing}.
 
 \begin{definition}[Repository]
   A repository is a tuple $R = (P, D, C)$ where $P$ is a set of packages, $D : P \rightarrow \mathscr{P p 1}(\mathscr{P p 1}(P))$ is the dependency function\footnote{$\mathscr{P p 1}(X)$ represents the set of subsets of X.}, and $C \subset P \times P$ is the conflict relation. The repository must satisfy the following conditions:
@@ -50,7 +50,7 @@ Now we can formalize the concept \emph{resolution}.
   \end{itemize}
 \end{definition}
 
-Note that a resolution may not always exist. There could be conflicts or missing dependencies.
+Note that a resolution may not always exist. There could be conflicts or missing dependencies. In the following, I use \emph{root package} as an synonym of \emph{initial package}, and \emph{root dependencies} means the dependencies of the root package.
 
 \subsection{Algorithm Overview}
 
@@ -115,7 +115,7 @@ The algorithm starts from the initial package, and advances following the depth-
 
 Compared to the repository triple $R = (P, D, C)$, the structure $packagesMap$ is the representation of the dependency function $D$, and as $P$ is the domain of $D$, thus is represented by the keys of $packagesMap$. The structure $librariesMap$ is a representation of conflicts $C$. Additional information is maintained in $packagesMap$ for more friendly resolution report.
 
-In the following, I introduce in detail how the particular feature of Maven or Ivy are handled by the \emph{closure construction algorithm}.
+In the following, I introduce in detail how the particular features of Maven or Ivy are handled by the \emph{closure construction algorithm}.
 
 \subsubsection{Fuzzy Constraints}
 
@@ -142,7 +142,7 @@ Ivy supports intransitive dependencies. To support this feature, only advance th
 
 \subsubsection{Scopes or Configurations}
 
-Maven supports \emph{scopes}, Ivy supports a similar but more flexible concept \emph{configurations}. To support this feature, they are added to the signature of the recursive function:
+Maven supports \emph{scopes}, Ivy supports a similar but more flexible concept \emph{configuration}. To support this feature, they are added to the signature of the recursive function:
 
 \begin{lstlisting}[language=Scala]
   // Maven
@@ -196,26 +196,22 @@ Inside the function body, the excludes are used to filter effective dependencies
 
 \subsubsection{Overrides}
 
-Ivy supports specifying an override mediation rule, overriding the revision requested for a transitive dependency. This feature can be useful when a direct dependency is bringing a transitive dependency for which you want to change the revision, without actually declaring a dependency on it (because the module doesn't actually depend on it).
+Ivy supports specifying an override mediation rule, overriding the revision requested for a transitive dependency. This feature can be useful when a direct dependency is bringing a transitive dependency for which the programmers want to change the revision, without actually declaring a dependency on it (because the module doesn't actually depend on it).
 
-Current implementation doesn't support this feature, but technically it's not very different from the support of \emph{excludes}, which is also effective and accumulative along the transitive dependency chain.
+Current implementation doesn't support this feature, but technically it's similar to the support of \emph{excludes}, which is also effective and accumulative along the transitive dependency chain.
 
 When interpreting a dependency constraint $L(pred)$, the algorithm should first check if the library $L$ is covered in the \emph{overrides} set. If it's, then the version constraint $pred$ should be replaced by the version constraint specified in the override rules.
 
-In case where there are two override rules on the transitive dependency chain about the same library, the override rule closer to the root package has higher precedence.
+In case where there are two override rules on the transitive dependency chain about the same library, the override rule closer to the root package has higher precedence\footnote{The Ivy official web site doesn't document how to handle such cases. This is just a reasonable proposition.}.
 
 \subsubsection{Force}
 
 Ivy supports a boolean flat \emph{force} on a dependency constraint, which says that this dependency
 should be forced to the specified revision. The effective scope of \emph{force} is global\footnote{Ivy documentation is obscure about this point, but that seems to be the only reasonable interpretation. \\\url{http://ant.apache.org/ivy/history/latest-milestone/ivyfile/dependency.html}} -- instead of being along the transitive dependency chain -- it means if a specific version of a library $L$ is forced, it has to override all dependencies on $L$ for every package in the repository.
 
-The global effective scope of \emph{force} implies we should do post-processing on the dependencies of each package in order to make \emph{force} effective. If there are multiple \emph{forces} on the same library, then it's up to the solver to select one from them -- usually the latest version is chosen.
+The global effective scope of \emph{force} implies we should do post-processing on the dependencies of each package in order to make \emph{force} effective. If there are multiple \emph{forces} on the same library, then it's up to the solver to select one from them -- usually the latest version is chosen\footnote{The Ivy official web site doesn't say anything about the scenario, it's just a reasonable proposition.}.
 
 This feature has not been implemented yet. But given the semantics above, it's not hard to implement this feature by keeping track of all forces during graph traversal, and then do post-update on dependencies of forced libraries for each package.
-
-%% \subsubsection{Conflict Manager}
-
-%% Ivy supports conflict manager.
 
 \subsection{Encoding Algorithm}
 
@@ -241,9 +237,9 @@ Once the local repository has been constructed, the \emph{encoding algorithm} ca
   }
 \end{lstlisting}
 
-This abstract interface enables us to use the same encoding algorithm for both Maven and Ivy. In the following I'll explain in detail how to encode the repository into a SAT problem. The encoding tricks are based on the work of Berre et al. \cite{berre2009dependency}.
+This abstract interface enables us to use the same encoding algorithm for both Maven and Ivy. In the following I'll explain in detail how to encode the repository into a SAT problem. I'll keep the introduction abstract, so that it's possible to switch to other SAT solvers following the tricks introduced here. For readers interested in the details of encoding the problem in SAT4J, please refer to the code base on Github\footnote{\url{https://github.com/liufengyun/bacala/blob/master/src/main/scala/bacala/alg/SatSolver.scala}}.
 
-In the implementation, SAT4J Pseudo\footnote{\url{http://www.sat4j.org}} version $2.3.4$ is used. In the following, I'll keep the introduction abstract, so that it's possible to switch to other SAT solvers following the tricks introduced here. For readers interested in the details of encoding the problem in SAT4J, please refer to the code base on Github\footnote{\url{https://github.com/liufengyun/bacala/blob/master/src/main/scala/bacala/alg/SatSolver.scala}}.
+The encoding tricks are based on the work of Berre et al. \cite{berre2009dependency}. The implementation is based on SAT4J Pseudo\footnote{\url{http://www.sat4j.org}} version $2.3.4$.
 
 \subsubsection{Encode Dependency}
 
@@ -289,7 +285,7 @@ A slightly different encoding is based on the fact that all package conflicts in
 (\sum_{p \in CL(L)} p) \leq 1
 \]
 
-In the implementation, the second approach is taken. Unlike the comment in \cite{berre2009dependency}, which thinks the second approach is superior for error reporting, we observed no such advantage in our implementation. We take the second approach mainly because it makes logical translation simpler.
+In the implementation, the second approach is taken. Unlike the comment in \cite{berre2009dependency}, which claims the second approach is superior for error reporting, we observed no such advantage in our implementation. We take the second approach mainly because it makes logical translation simpler.
 
 \subsubsection{Choose the Optimal Solution}
 
@@ -307,7 +303,7 @@ This approach works well in our experiment, and it's better than approaches that
 
 \subsubsection{Report Friendly Error Message}
 
-In case there's no solution for a given repository, the algorithm should report friendly error messages to end users. Here there are two problems related to usability.
+In case there's no solution for a given repository, the algorithm should report friendly error messages to end users. There are two problems related to user-friendliness.
 
 First, as each library has several candidate versions in the repository, when there's no solution available, there're many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach is to choose the minimal combination of packages where this is no solution.
 
