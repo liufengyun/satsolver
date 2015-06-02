@@ -1,9 +1,9 @@
 \begin{abstract}
-  This report introduces a new algorithm to resolve software package dependency for Ivy and Maven ecosystems by using off-the-shelf SAT solvers. This algorithm avoids the common problem in Maven and Ivy, which rely on conflict manager even when there're no conflicts, which produces confusing results to end users sometimes.
+  This report introduces a new algorithm to resolve software package dependency for Ivy and Maven ecosystems by using off-the-shelf SAT solvers. This algorithm avoids the common problem in Maven and Ivy, which rely on conflict resolution even when there're no conflicts, which produces confusing results to end users sometimes.
 
-  The new algorithm can elegantly handle the case of missing dependencies or conflicts by showing the error as a tree, which makes it clear to end users how the root dependencies lead to the error transitively.
+Besides, the new algorithm can elegantly handle the case of missing dependencies or conflicts by showing the error as a tree, which makes it clear to end users how the root dependencies lead to the error transitively.
 
-  The algorithm is practically fast enough, which makes it an ideal candidate for improving existing dependency management tools.
+%  The algorithm is practically fast enough, which makes it an ideal candidate for improving existing dependency management tools.
 
 This report also discusses pragmatics that are related to software package dependency management in general. I argue for the separation of project specification and artifact specification, and a restriction on the features of artifact specification. These reflections might be helpful for future ecosystem designers.
 

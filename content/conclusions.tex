@@ -1,16 +1,16 @@
 \section{Conclusion}
 
-Our project has shown that usage of SAT solvers for dependency management is not only theoretically possible, but also practically feasible. The new algorithm based on SAT solvers produce more correct answers. And the algorithm can report the error as a dependency tree when there is missing dependency or conflict, which makes it clear to end users how the root dependencies lead to the error transitively.
+Our project has shown that usage of SAT solvers for dependency management is not only theoretically possible, but also practically feasible. This algorithm avoids the common problem in Maven and Ivy -- which rely on conflict resolution even when there're no conflicts -- and produces more correct answers. And the algorithm can report the error as a dependency tree when there is missing dependency or conflict, which makes it clear to end users how the root dependencies lead to the error transitively.
 
-The algorithm is practically fast enough, which makes it an ideal candidate for improving existing dependency management tools.
+% The algorithm is practically fast enough, which makes it an ideal candidate for improving existing dependency management tools.
 
 \subsection{Future Work}
 
 As we've seen, in the new resolution algorithm, the time spent on network IO is dominating, the time spent on SAT solver is insignificant. If the POM or Ivy files are local, the algorithm would be extremely fast.
 
-This implies we can use a central server for dependency resolution. The client sends the dependency specification to the server, the algorithm runs and sends the resolution result back to the client. The client side only needs to download artifacts from repositories.
+This implies we can use a central server for dependency resolution. The client sends the dependency specification to the server, the algorithm runs and sends the resolution result back to the client. The client only needs to download artifacts from repositories.
 
-In the process of resolving dependency, the server downloads POM or Ivy files from repositories and cache them locally. The more POM and Ivy files the server caches, the faster the server becomes.
+In the process of resolving dependency, the server downloads POM or Ivy files from repositories and cache them locally. The more POM and Ivy files the server caches, the faster the server will be.
 
 For companies which have private repositories, they can set up private servers for dependency resolution.
 

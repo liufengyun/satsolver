@@ -1,14 +1,22 @@
 \section{Dependency Management through SAT Solvers}
 
-In this section, I'll describe in detail how to encode a dependency resolution problem as a SAT problem. I'll especially focus on important practical issues, such as how to select the optimal solutions and how to report friendly errors.
+In this section, I'll describe in detail how the new algorithm works. The resolution algorithm consists of two independent algorithms:
+
+\begin{enumerate}
+\item An algorithm to construct a local repository based on the transitivity of dependency.
+\item An algorithm to use an SAT solver to find an optimal solution on the local repository.
+\end{enumerate}
+
+The first algorithm, which I call the \emph{closure construction algorithm}, recursively constructs a repository whose packages are the transitive closure of the initial constraints. In the process of constructing the local repository, it has to handle particular features of Maven and Ivy, such as \emph{fuzzy constraints}, \emph{excludes}, \emph{intransitive dependencies}, \emph{forces}, \emph{scopes} or \emph{configurations}. We need two versions of the algorithm here, one for Maven and one for Ivy.
+
+The second algorithm, which I call the \emph{encoding algorithm}, encodes the local repository to the format of a specific SAT solver, and decodes the result to a user-friendly format. We only need one version of this algorithm.
+
 
 \subsection{Formalism}
 
 Formalization of the problem based on set semantics is the first step to solve the problem via SAT solvers. The formalism used here is based on the work of Mancinelli et al.\cite{mancinelli2006managing}.
 
-There is a big disparity between the concepts in the Maven ecosystem and the Ivy ecosystem. For example, a package in Maven is very different from a package in Ivy. In Maven, a package is the same as an artifact, but in Ivy a package may define several artifacts.
-
-The difference can be abstracted away for the purpose of dependency management based on following two concepts.
+There is a big disparity between the concepts in the Maven ecosystem and the Ivy ecosystem. For example, a package in Maven is very different from a package in Ivy. In Maven, a package is the same as an artifact, but in Ivy a package may define several artifacts. The difference can be abstracted away for the purpose of dependency management based on following two concepts.
 
 \begin{definition}[Library]
   A library is a unique entity which can be versioned.  The versioning of a library should be a total-order. In the Java world, a library is usually identified by the pair $(group, name)$.
@@ -41,7 +49,7 @@ For example, if $D(p) = \{\{a_1, ..., a_k\}, \{c_1, ..., c_j\}\}$, then in order
 Now we can formalize the concept \emph{resolution}.
 
 \begin{definition}[Resolution]
-  A resolution for the initial package $\pi$ with regard to a repository $R = (P, D, C)$ is a subset $I$ of $P$. The resolution must satisfy following conditions:
+  A resolution for the initial package $\pi$ with regard to a repository $R = (P, D, C)$ is a subset $I$ of $P$. The resolution $I$ must satisfy following conditions:
 
   \begin{itemize}
   \item \emph{Inclusion}: The initial package is in the resolution. Formally, $\pi \in I$.
@@ -50,27 +58,14 @@ Now we can formalize the concept \emph{resolution}.
   \end{itemize}
 \end{definition}
 
-Note that a resolution may not always exist. There could be conflicts or missing dependencies. In the following, I use \emph{root package} as an synonym of \emph{initial package}, and \emph{root dependencies} means the dependencies of the root package.
-
-\subsection{Algorithm Overview}
-
-The resolution algorithm consists of two independent algorithms:
-
-\begin{enumerate}
-\item An algorithm to construct a local repository based on the transitivity of dependency.
-\item An algorithm to use a SAT solver to find an optimal solution on the local repository.
-\end{enumerate}
-
-The first algorithm, which I call the \emph{closure construction algorithm}, recursively constructs a repository whose packages are the transitive closure of the initial constraints. In the process of constructing the local repository, it has to handle particular features of Maven and Ivy, such as \emph{fuzzy constraints}, \emph{excludes}, \emph{intransitive dependencies}, \emph{forces}, \emph{scopes} or \emph{configurations}. We need two versions of the algorithm here, one for Maven and one for Ivy.
-
-The second algorithm, which I call the \emph{encoding algorithm}, encodes the local repository to the format of a specific SAT solver, and decodes the result to a user-friendly format. We only need one version of this algorithm, as it is based on the abstract concept of \emph{library} and \emph{package} we defined above.
+Note that a resolution may not always exist. There could be conflicts or missing dependencies. In the following, I use \emph{root package} as a synonym of \emph{initial package}, and \emph{root dependencies} means the dependencies of the root package.
 
 \subsection{Closure Construction Algorithm}
 
-The closure construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository, which is defined as follows.
+The closure construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository of the root package, which is defined as follows.
 
 \begin{definition}[Flattened Dependency Graph]
-  The flattened dependency graph $G = (N, E)$ for a repository $R = (P, D, C)$ is a directed graph, where the nodes are the packages, and the arcs are the dependency between two packages. Formally, $N = P$, and $E = \{ (p, q) | \exists d_i \in D(p) \land q \in d_i\}$.
+  The flattened dependency graph $G = (N, E)$ for a repository $R = (P, D, C)$ is a directed graph, where the nodes are the packages, and the arcs are the dependencies between packages. Formally, $N = P$, and $E = \{ (p, q) | \exists d_i \in D(p) \land q \in d_i\}$.
 \end{definition}
 
 Note that there could be cycles in the graph. Following example demonstrates how cycles could arise in practice.
@@ -80,9 +75,7 @@ Note that there could be cycles in the graph. Following example demonstrates how
 (y, 1.4) depends on x(>=2.1)
 \end{verbatim}
 
-It's obvious that in the example above, there is an arc from $(x, 2.3)$ to $(y, 1.4)$, because $(y, 1.4) \in \{(y, v) | v \geq 1.3 \}$. For similar reasons, there's an arc from $(y, 1.4)$ to $(x, 2.3)$. Thus, in this case there's a cycle in the flattened dependency graph.
-
-The existence of cycles in the graph implies that the algorithm should keep track of visited nodes in order to avoid infinite loops.
+It's obvious that in the example above, there is an arc from $(x, 2.3)$ to $(y, 1.4)$, because $(y, 1.4) \in \{(y, v) | v \geq 1.3 \}$. For similar reasons, there's an arc from $(y, 1.4)$ to $(x, 2.3)$. Thus, in this case there's a cycle in the flattened dependency graph. The existence of cycles in the graph implies that the algorithm should keep track of visited nodes in order to avoid infinite loops.
 
 The algorithm is implemented as a recursive function in Scala, which has following signature:
 \begin{lstlisting}[language=Scala]
@@ -94,7 +87,7 @@ The algorithm is implemented as a recursive function in Scala, which has followi
                excludes: Seq[IExclude], path: Set[PackageT]): Unit
 \end{lstlisting}
 
-The algorithm starts from the initial package, and advances following the depth-first-search approach on the flattened dependency graph of the closure repository. In the visiting process, the algorithm updates two mutable data structures $packagesMap$ and $librariesMap$:
+The algorithm starts from the root package, and advances following the depth-first-search approach on the flattened dependency graph of the closure repository. In the visiting process, the algorithm updates two mutable data structures $packagesMap$ and $librariesMap$:
 
 \begin{lstlisting}[language=Scala]
   // Maven
@@ -113,9 +106,9 @@ The algorithm starts from the initial package, and advances following the depth-
   val librariesMap = new TrieMap[ILib, Set[IPackage]]
 \end{lstlisting}
 
-Compared to the repository triple $R = (P, D, C)$, the structure $packagesMap$ is the representation of the dependency function $D$, and as $P$ is the domain of $D$, thus is represented by the keys of $packagesMap$. The structure $librariesMap$ is a representation of conflicts $C$. Additional information is maintained in $packagesMap$ for more friendly resolution report.
+Compared to the repository triple $R = (P, D, C)$, the structure $packagesMap$ is the representation of the dependency function $D$, and as $P$ is the domain of $D$, thus is represented by the keys of $packagesMap$. The structure $librariesMap$ is a representation of conflicts $C$. Additional information is maintained in $packagesMap$ for more detailed resolution report.
 
-In the following, I introduce in detail how the particular features of Maven or Ivy are handled by the \emph{closure construction algorithm}.
+In the following, I'm going to introduce in detail how the particular features of Maven or Ivy are handled by the \emph{closure construction algorithm}.
 
 \subsubsection{Fuzzy Constraints}
 
@@ -164,13 +157,15 @@ Maven supports \emph{scopes}, Ivy supports a similar but more flexible concept \
   }
 \end{lstlisting}
 
-The first line in the body of the function filters the effective dependencies according to the semantics of scope and configurations.
+The first line in the body of the function filters the effective dependencies according to the semantics of scope and configurations respectively.
 
 For Maven, the new scope is always \emph{compile}, because Maven scopes are fixed, and it doesn't make sense for one package to depend on scopes other than \emph{compile} of another package.
 
 For Ivy, the new configurations are calculated for each dependency according to the dependency mapping of configurations defined in the descriptor.
 
 \subsubsection{Excludes}
+
+\label{sat:excludes}
 
 Both Maven and Ivy support excludes in dependency. This feature complicates the \emph{closure construction algorithm}. Ideally, each package in the \emph{flatten dependency graph} is visited once. However, the effective scope of excludes is along the transitive chain, it's possible that for a dependency $d$ of a package $\pi$, it's excluded in one chain, but included in another chain. This is illustrated by following example:
 
@@ -179,7 +174,7 @@ p   depends on(exclude=t)   h(deps={t(>2.1)})
 q   depends on   h(deps={t(>2.1)})
 \end{verbatim}
 
-In the example above, the dependency path from $p$ to $h$ excludes the library $t$, while the dependency path from $q$ to $h$ includes $t$. This implies we should allow each package to be visited multiple times along different paths, and the dependencies of different paths should be added together by the set union operation.
+In the example above, the dependency path from $p$ to $h$ excludes the library $t$, while the dependency path from $q$ to $h$ includes $t$. This implies we should allow each package to be visited multiple times along different paths, and the dependencies of different paths should be added together by the set union operation. As the combination of paths in a graph could be exponential, the cost in path traversal is potentially exponential. That's one of the reason why I think we should restrict features in artifact specification. I'll discuss more about the topic in section \ref{pragmatics}.
 
 The parameter \emph{path} in the signature represents the visited path. The parameter \emph{excludes} represents the effective excludes.
 
@@ -202,11 +197,11 @@ Current implementation doesn't support this feature, but technically it's simila
 
 When interpreting a dependency constraint $L(pred)$, the algorithm should first check if the library $L$ is covered in the \emph{overrides} set. If it's, then the version constraint $pred$ should be replaced by the version constraint specified in the override rules.
 
-In case where there are two override rules on the transitive dependency chain about the same library, the override rule closer to the root package has higher precedence\footnote{The Ivy official web site doesn't document how to handle such cases. This is just a reasonable proposition.}.
+In case where there are two override rules on the same library, the override rule closer to the root package has higher precedence\footnote{The Ivy official web site doesn't document how to handle such cases. This is just a reasonable proposition.}.
 
 \subsubsection{Force}
 
-Ivy supports a boolean flat \emph{force} on a dependency constraint, which says that this dependency
+Ivy supports a boolean flag \emph{force} on a dependency constraint, which says that this dependency
 should be forced to the specified revision. The effective scope of \emph{force} is global\footnote{Ivy documentation is obscure about this point, but that seems to be the only reasonable interpretation. \\\url{http://ant.apache.org/ivy/history/latest-milestone/ivyfile/dependency.html}} -- instead of being along the transitive dependency chain -- it means if a specific version of a library $L$ is forced, it has to override all dependencies on $L$ for every package in the repository.
 
 The global effective scope of \emph{force} implies we should do post-processing on the dependencies of each package in order to make \emph{force} effective. If there are multiple \emph{forces} on the same library, then it's up to the solver to select one from them -- usually the latest version is chosen\footnote{The Ivy official web site doesn't say anything about the scenario, it's just a reasonable proposition.}.
@@ -237,13 +232,13 @@ Once the local repository has been constructed, the \emph{encoding algorithm} ca
   }
 \end{lstlisting}
 
-This abstract interface enables us to use the same encoding algorithm for both Maven and Ivy. In the following I'll explain in detail how to encode the repository into a SAT problem. I'll keep the introduction abstract, so that it's possible to switch to other SAT solvers following the tricks introduced here. For readers interested in the details of encoding the problem in SAT4J, please refer to the code base on Github\footnote{\url{https://github.com/liufengyun/bacala/blob/master/src/main/scala/bacala/alg/SatSolver.scala}}.
+This abstract interface enables us to use the same encoding algorithm for both Maven and Ivy. In the following I'll explain in detail how to encode the repository into a SAT problem. I'll keep the introduction abstract, so that it's possible to switch to other SAT solvers following the tricks introduced here. For readers interested in the details of encoding the problem in SAT4J, please refer to our code base on Github\footnote{\url{https://github.com/liufengyun/bacala/blob/master/src/main/scala/bacala/alg/SatSolver.scala}}.
 
 The encoding tricks are based on the work of Berre et al. \cite{berre2009dependency}. The implementation is based on SAT4J Pseudo\footnote{\url{http://www.sat4j.org}} version $2.3.4$.
 
 \subsubsection{Encode Dependency}
 
-Remember that in our formalism of a repository $R = (P, D, C)$, the dependency of a package $p$ is like $D(p) = \{\{a_1, ..., a_k\}, \{c_1, ..., c_j\}\}$. It means in order to use $p$, at least one package in $\{a_1, ..., a_k\}$ and one in $\{c_1, ..., c_j\}$ must be used. This naturally translates to following logical formula:
+Remember that in our formalism of a repository $R = (P, D, C)$, the dependency of a package $p$ is like $D(p) = \{\{a_1, ..., a_k\}, \{c_1, ..., c_j\}\}$. It means in order to use $p$, at least one package in $\{a_1, ..., a_k\}$ and one in $\{c_1, ..., c_j\}$ must be used. If we take each package as a proposition variable, this naturally translates to following logical formula:
 
 \[
 p \rightarrow ((a_1 \vee ... \vee a_k) \wedge (c_1 \vee ... \vee c_j))
@@ -255,7 +250,7 @@ Generally, for a package $p$ with $D(p) = \{ d_1, d_2, ..., d_n\}$ and $d_i = \{
 p \rightarrow \bigwedge_{1 \leq i \leq n} \bigvee_{1 \leq j \leq m_i} q_{i,j}
 \]
 
-Some SAT solvers require the input as \emph{conjunctive normal form}, which can be derived as follows:
+Some SAT solvers require the input in \emph{conjunctive normal form}, which can be derived as follows:
 
 \[
 p \rightarrow \bigwedge_{1 \leq i \leq n} \bigvee_{1 \leq j \leq m_i} q_{i,j}
@@ -273,7 +268,7 @@ If the package $p$ is the root package, it's always required. Thus the dependenc
 
 \subsubsection{Encode Conflicts}
 
-For given a repository $R = (P, D, C)$, the conflicts $C$ is a set of pairs like $(p, q)$. A natural approach to encode the conflict pair $(p, q)$ as $\neg p \vee \neg q$. Then all conflicts in the repository can be encoded as following formula:
+For given a repository $R = (P, D, C)$, the conflicts $C$ is a set of pairs like $(p, q)$. A natural approach is to encode the conflict pair $(p, q)$ as $\neg p \vee \neg q$. Then all conflicts in the repository can be encoded as following formula:
 
 \[
 \bigwedge_{(p, q) \in C} \neg p \vee \neg q
@@ -305,7 +300,7 @@ This approach works well in our experiment, and it's better than approaches that
 
 In case there's no solution for a given repository, the algorithm should report friendly error messages to end users. There are two problems related to user-friendliness.
 
-First, as each library has several candidate versions in the repository, when there's no solution available, there're many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach is to choose the minimal combination of packages where this is no solution.
+First, as each library has several candidate versions in the repository, there're many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach is to choose the minimal combination of packages where this is no solution.
 
 Second, as conflicts or missing dependencies can happen very deep in the graph, just reporting these errors will confuse end users, as these packages are not directly required by the root package. A friendly error report should relate the missing dependencies or conflicts to the root dependencies.
 
@@ -319,6 +314,6 @@ Based on this observation, we are able to display the missing dependencies or co
 
 \subsection{Performance}
 
-With the POM and Ivy files we tested, the SAT resolver never takes more than one second. The largest Maven file we tested has 46 packages in the solution set, and it took 0.17 second on SAT solver, 68.4 seconds in downloading POM files. With local file system caching of POM files, the cost of network IO drops to zero after the first run on the project.
+For the POM and Ivy files we tested, the SAT resolver never takes more than one second. The largest POM file we tested has 46 packages in the solution set, and it took 0.17 second on SAT solver, 68.4 seconds in downloading POM files. With local file system caching of POM files, the cost of network IO drops quickly after the first run on the project.
 
-When all the POM and Ivy files are cached locally, the new algorithm is about 30 times faster than Maven and Ivy.
+% When all the POM and Ivy files are cached locally, the new algorithm is about 30 times faster than Maven and Ivy.
