@@ -12,7 +12,7 @@ By \emph{project specification} I mean the specification of package dependencies
 
 I propose that it's good to separate project specification and artifact specification, and use different specification languages for them.
 
-The most important reason is that they target different audience. Project specifications are read and written by programmers, while artifact specifications are usually generated and read by programs. Project specifications change as the projects evolve, while artifact specifications stay the same once created. DSL is suitable for project specifications, while XML is suitable for artifact specifications. In this regard, Sbt and Gradle are on the right track.
+The most important reason is that they target different audience. Project specifications are read and written by programmers, while artifact specifications are usually generated and read by programs. Project specifications change as the projects evolve, while artifact specifications stay the same once created. DSL is suitable for project specifications, while XML is suitable for artifact specifications. In this regard, SBT and Gradle are on the right track.
 
 Besides, project specification and artifact specification need different features. This is discussed in detail in next section.
 
@@ -47,7 +47,7 @@ In this section, I present an evaluation about which features are appropriate in
 
 \textbf{Resolvers}. A project specification may contain information about resolvers(remote repositories), but it doesn't make sense to put this information in the artifact specification, as an artifact might be placed in a lot of places and the information may change over time. Ivy moved resolvers to setting files, which is an improvement over Maven.
 
-% \textbf{Force}. Force tells the dependency manager to use a specific version of a library even if there's conflict. It's reasonable to use this feature sometimes at the risk of the programmer in development. Usage of \emph{force} should be forbidden in artifact specification, as it imposes an unconditional decision on all projects where the package is used, which is an aggression on the freedom of projects.
+% \textbf{Force}. Force tells the dependency manager to use a specific version of a library even if there is conflict. It's reasonable to use this feature sometimes at the risk of the programmer in development. Usage of \emph{force} should be forbidden in artifact specification, as it imposes an unconditional decision on all projects where the package is used, which is an aggression on the freedom of projects.
 
 \textbf{Intransitive}. Intransitive dependency doesn't make sense in artifact specification because marking a dependency as intransitive depends on some assumptions about the environment. These assumptions may not necessarily hold in all usages of the artifact. In the context of project development, it's relatively safe to make assumptions and the feature can be used at the risk of the programmer.
 
@@ -63,4 +63,4 @@ Another reason against the usage of excludes in artifact specification is about 
 
 \textbf{Build Tasks}. It's reasonable to define build tasks in a project specification, but it doesn't make sense to define build task inside an artifact specification, as it is useless.
 
-I think these arguments are enough to support our initial proposition. Upon inspection of real world tools, we find Sbt and Gradle are on the right track. Ivy and Maven are inadequate because they don't provide a friendly project specification language for programmers, and also because they provide too many features for artifact specifications, which is problematic.
+I think these arguments are enough to support our initial proposition. Upon inspection of real world tools, we find SBT and Gradle are on the right track. Ivy and Maven are inadequate because they don't provide a friendly project specification language for programmers, and also because they provide too many features for artifact specifications, which is problematic.

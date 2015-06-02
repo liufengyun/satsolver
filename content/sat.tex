@@ -75,7 +75,7 @@ Note that there could be cycles in the graph. Following example demonstrates how
 (y, 1.4) depends on x(>=2.1)
 \end{verbatim}
 
-It's obvious that in the example above, there is an arc from $(x, 2.3)$ to $(y, 1.4)$, because $(y, 1.4) \in \{(y, v) | v \geq 1.3 \}$. For similar reasons, there's an arc from $(y, 1.4)$ to $(x, 2.3)$. Thus, in this case there's a cycle in the flattened dependency graph. The existence of cycles in the graph implies that the algorithm should keep track of visited nodes in order to avoid infinite loops.
+It's obvious that in the example above, there is an arc from $(x, 2.3)$ to $(y, 1.4)$, because $(y, 1.4) \in \{(y, v) | v \geq 1.3 \}$. For similar reasons, there is an arc from $(y, 1.4)$ to $(x, 2.3)$. Thus, in this case there is a cycle in the flattened dependency graph. The existence of cycles in the graph implies that the algorithm should keep track of visited nodes in order to avoid infinite loops.
 
 The algorithm is implemented as a recursive function in Scala, which has following signature:
 \begin{lstlisting}[language=Scala]
@@ -298,9 +298,9 @@ This approach works well in our experiment, and it's better than approaches that
 
 \subsubsection{Report Friendly Error Message}
 
-In case there's no solution for a given repository, the algorithm should report friendly error messages to end users. There are two problems related to user-friendliness.
+In case there is no solution for a given repository, the algorithm should report friendly error messages to end users. There are two problems related to user-friendliness.
 
-First, as each library has several candidate versions in the repository, there're many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach is to choose the minimal combination of packages where this is no solution.
+First, as each library has several candidate versions in the repository, there are many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach is to choose the minimal combination of packages where this is no solution.
 
 Second, as conflicts or missing dependencies can happen very deep in the graph, just reporting these errors will confuse end users, as these packages are not directly required by the root package. A friendly error report should relate the missing dependencies or conflicts to the root dependencies.
 
