@@ -4,7 +4,7 @@
 
 To elegantly solve the software dependency problem and avoid the dependency hell, it requires not only good resolution algorithms, but also good practices. For example, \emph{semantic versioning}\footnote{\url{http://semver.org}} is widely recognized to be a good practice in package versioning.
 
-In this section, I'll argue for (1) the separation of project specification and artifact specification, and (2) a restriction on the features of artifact specification. I hope this analysis will be useful for future ecosystem designers.
+In this section, I'll argue for (1) the separation of project specification and artifact specification, and (2) the restriction on the features of artifact specification. I hope this analysis will be useful for future ecosystem designers.
 
 \subsection{Separation of Project Specification and Artifact Specification}
 
@@ -12,7 +12,7 @@ By \emph{project specification} I mean the specification of package dependencies
 
 I propose that it's good to separate project specification and artifact specification, and use different specification languages for them.
 
-The most important reason is that they target different audience. Project specifications are read and written by programmers, while artifact specifications are usually generated and read by programs. Project specifications change as the projects evolve, while artifact specifications stay the same once created. DSL is suitable for project specifications, while XML is suitable for artifact specifications. In this regard, SBT and Gradle are on the right track.
+The most important reason is that they target different audiences. Project specifications are read and written by programmers, while artifact specifications are usually generated and read by programs. Project specifications change as the projects evolve, while artifact specifications stay the same once created. DSL is suitable for project specifications, while XML is suitable for artifact specifications. In this regard, SBT and Gradle are on the right track.
 
 Besides, project specification and artifact specification need different features. This is discussed in detail in next section.
 
@@ -53,8 +53,6 @@ In this section, I present an evaluation about which features are appropriate in
 
 \textbf{Excludes}. Excludes tells the dependency manager to exclude dependencies on some libraries. For similar reasons as \emph{intransitive}, the usage of \emph{excludes} is resolution-context-sensitive, while artifact specification should be as resolution-context-free as possible.
 
-Another reason against the usage of excludes in artifact specification is about performance. As it's mentioned in section \ref{sat:excludes}, the effective scope of excludes is along the transitive path. As the combination of paths in the graph is exponential, which may lead to exponential blow up even in simple dependency graphs. This line of argument also holds for \emph{overrides}.
-
 \textbf{Overrides}. Overrides tells the dependency manager to use a specific version of a library for all dependencies on the library. Like \emph{excludes}, the usage of \emph{overrides} is resolution-context-sensitive, thus it should not appear in artifact specification, which is assumed to be resolution-context-free. Usage of overrides imposes an unconditional decision on all projects where the package is used, which is an aggression on the freedom of projects.
 
 \textbf{Configurations}. Project specifications may contain several different configuration, such as test, production, etc. However, it doesn't make sense to have several configurations in an artifact specification, as when an artifact is required, it's expected to behave the same in different contexts.
@@ -63,4 +61,14 @@ Another reason against the usage of excludes in artifact specification is about 
 
 \textbf{Build Tasks}. It's reasonable to define build tasks in a project specification, but it doesn't make sense to define build task inside an artifact specification, as it is useless.
 
-I think these arguments are enough to support our initial proposition. Upon inspection of real world tools, we find SBT and Gradle are on the right track. Ivy and Maven are inadequate because they don't provide a friendly project specification language for programmers, and also because they provide too many features for artifact specifications, which is problematic.
+\subsection{Path-Sensitive Features}
+
+\label{pragmatics:path-sensitive}
+
+As it's mentioned in section \ref{sat:excludes}, according to the semantics of Ivy and Maven, \emph{excludes} and \emph{overrides} are effective and accumulative along the transitive path. A dependency excluded in one path might be required by another path, so every combination of path should be visited, instead of visiting each package only once. As the combination of paths in the graph is exponential, it may lead to exponential blow up even in simple dependency graphs.
+
+As \emph{Path-sensitive} features make it difficult for dependency resolvers to work both efficiently and correctly, I think they should be forbidden completely. More concretely, \emph{excludes} and \emph{overrides} should be effective globally, instead of being along the transitive path.
+
+\subsection{Conclusion}
+
+I think these arguments are enough to support our initial proposition. Upon inspection of real world tools, we find SBT and Gradle are on the right track. Ivy and Maven are inadequate because they don't provide a friendly project specification language for programmers, and also because they provide too many features for artifact specifications and extensive usage of path-sensitive features, which is problematic.

@@ -7,9 +7,9 @@ In this section, I'll describe in detail how the new algorithm works. The resolu
 \item An algorithm to use an SAT solver to find an optimal solution on the local repository.
 \end{enumerate}
 
-The first algorithm, which I call the \emph{closure construction algorithm}, recursively constructs a repository whose packages are the transitive closure of the initial constraints. In the process of constructing the local repository, it has to handle particular features of Maven and Ivy, such as \emph{fuzzy constraints}, \emph{excludes}, \emph{intransitive dependencies}, \emph{forces}, \emph{scopes} or \emph{configurations}. We need two versions of the algorithm here, one for Maven and one for Ivy.
+The first algorithm, which I call the \emph{closure construction algorithm}, recursively constructs a repository whose packages are the transitive closure of the initial constraints. In the process of constructing the local repository, it has to handle particular features of Maven and Ivy, such as \emph{fuzzy constraints}, \emph{excludes}, \emph{intransitive dependencies}, \emph{forces}, \emph{scopes} or \emph{configurations}. We need two versions of the algorithm here, one for Maven and one for Ivy, to handle their differences.
 
-The second algorithm, which I call the \emph{encoding algorithm}, encodes the local repository to the format of a specific SAT solver, and decodes the result to a user-friendly format. We only need one version of this algorithm.
+The second algorithm, which I call the \emph{encoding algorithm}, encodes the local repository to the format of a specific SAT solver, and decodes the result to a user-friendly format. Thanks to the abstraction in our implementation, we only need one version of this algorithm.
 
 
 \subsection{Formalism}
@@ -62,13 +62,22 @@ Note that a resolution may not always exist. There could be conflicts or missing
 
 \subsection{Closure Construction Algorithm}
 
-The closure construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository of the root package, which is defined as follows.
+The closure construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository of the root package, which are defined as follows.
+
+\begin{definition}[Closure Repository]
+  The closure repository for a package $\pi$ with regard to a repository $R = (P, D, C)$ is a sub-repository $R' = (P', D', C')$, where the packages in the repository are the transitive closure of the dependencies of the package $\pi$. Formally, $\pi \in P'$, and $\forall p \in P$, $\exists q \in P'\land \exists d_i \in D(q) \land p \in d_i \rightarrow p \in P'$. $D'$ and $C'$ are defined based on $P'$:
+
+  \begin{itemize}
+  \item $D' = \{ (p, D(p)) | p \in P' \}$.
+  \item $C' = \{ (p, q) | (p, q) \in C \land p \in P' \land q \in P' \}$.
+  \end{itemize}
+\end{definition}
 
 \begin{definition}[Flattened Dependency Graph]
   The flattened dependency graph $G = (N, E)$ for a repository $R = (P, D, C)$ is a directed graph, where the nodes are the packages, and the arcs are the dependencies between packages. Formally, $N = P$, and $E = \{ (p, q) | \exists d_i \in D(p) \land q \in d_i\}$.
 \end{definition}
 
-Note that there could be cycles in the graph. Following example demonstrates how cycles could arise in practice.
+Note that there could be cycles in the flattened dependency graph. Following example demonstrates how cycles could arise in practice.
 
 \begin{verbatim}
 (x, 2.3) depends on y(>=1.3)
@@ -174,7 +183,7 @@ p   depends on(exclude=t)   h(deps={t(>2.1)})
 q   depends on   h(deps={t(>2.1)})
 \end{verbatim}
 
-In the example above, the dependency path from $p$ to $h$ excludes the library $t$, while the dependency path from $q$ to $h$ includes $t$. This implies we should allow each package to be visited multiple times along different paths, and the dependencies of different paths should be added together by the set union operation. As the combination of paths in a graph could be exponential, the cost in path traversal is potentially exponential. That's one of the reason why I think we should restrict features in artifact specification. I'll discuss more about the topic in section \ref{pragmatics}.
+In the example above, the dependency path from $p$ to $h$ excludes the library $t$, while the dependency path from $q$ to $h$ includes $t$. This implies we should allow each package to be visited multiple times along different paths, and the dependencies of different paths should be added together by the set union operation. As the combination of paths in a graph could be exponential, the cost in path traversal is potentially exponential. That's one of the reason why I think we should forbid \emph{path-sensitive} features in dependency specification. I'll discuss more about the topic in section \ref{pragmatics:path-sensitive}.
 
 The parameter \emph{path} in the signature represents the visited path. The parameter \emph{excludes} represents the effective excludes.
 
@@ -187,7 +196,7 @@ The parameter \emph{path} in the signature represents the visited path. The para
                excludes: Seq[IExclude], path: Set[PackageT]): Unit
 \end{lstlisting}
 
-Inside the function body, the excludes are used to filter effective dependencies. Both the \emph{exludes} and \emph{path} are accumulated along the visited path, but different paths don't interfere with each other.
+Inside the function body, the excludes are used to filter effective dependencies. Both the \emph{exludes} and \emph{path} are accumulated along the visited path, different paths don't interfere with each other.
 
 \subsubsection{Overrides}
 
@@ -210,7 +219,7 @@ This feature has not been implemented yet. But given the semantics above, it's n
 
 \subsection{Encoding Algorithm}
 
-Once the local repository has been constructed, the \emph{encoding algorithm} can encode the repository into a SAT problem and call a SAT solver to find a resolution. The encoding algorithm depends on an abstract representation of repository, which has following signature:
+Once the local repository has been constructed, the \emph{encoding algorithm} can encode the repository into an SAT problem and call an SAT solver to find a resolution. The encoding algorithm depends on an abstract representation of repository, which has following signature:
 
 \begin{lstlisting}[language=Scala]
   abstract class Repository { outer =>
@@ -232,7 +241,7 @@ Once the local repository has been constructed, the \emph{encoding algorithm} ca
   }
 \end{lstlisting}
 
-This abstract interface enables us to use the same encoding algorithm for both Maven and Ivy. In the following I'll explain in detail how to encode the repository into a SAT problem. I'll keep the introduction abstract, so that it's possible to switch to other SAT solvers following the tricks introduced here. For readers interested in the details of encoding the problem in SAT4J, please refer to our code base on Github\footnote{\url{https://github.com/liufengyun/bacala/blob/master/src/main/scala/bacala/alg/SatSolver.scala}}.
+This abstract interface enables us to use the same encoding algorithm for both Maven and Ivy. In the following I'll explain in detail how to encode the repository into an SAT problem. I'll keep the introduction abstract, so that it's possible to switch to other SAT solvers following the tricks introduced here. For readers interested in the details of encoding the problem in SAT4J, please refer to our code base on Github\footnote{\url{https://github.com/liufengyun/bacala/blob/master/src/main/scala/bacala/alg/SatSolver.scala}}.
 
 The encoding tricks are based on the work of Berre et al. \cite{berre2009dependency}. The implementation is based on SAT4J Pseudo\footnote{\url{http://www.sat4j.org}} version $2.3.4$.
 
@@ -294,19 +303,21 @@ SAT4J supports setting a \emph{pseudo-boolean function} to minimize for resoluti
 
 So the problem becomes \emph{how to define the weight for each package $p$ in the repository}. The approach we take is rank-based weight. For each library, we rank all versions of the library in the repository, newer versions get lower ranks. Then we use the rank of a package for its weight in the objective function.
 
-This approach works well in our experiment, and it's better than approaches that depend on version numbers, as the latter are prone to version skew, where the library has large version numbers will be dominating in the objective function. The rank-based approach can be seen as having performed a normalization step on the version numbers.
+This approach works well in our experiment, and it's better than approaches that depend on version numbers, as the latter are prone to version skew, where the libraries having large version numbers will be dominating in the objective function. The rank-based approach can be seen as having performed a normalization step on the version numbers.
 
-\subsubsection{Report Friendly Error Message}
+\subsubsection{Report Friendly Error Messages}
 
-In case there is no solution for a given repository, the algorithm should report friendly error messages to end users. There are two problems related to user-friendliness.
+In case there is no solution for a given repository, the algorithm should report friendly error messages to end users. There are two problems related to friendly error reporting.
 
-First, as each library has several candidate versions in the repository, there are many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach is to choose the minimal combination of packages where this is no solution.
+First, as each library has several candidate versions in the repository, there are many combinations of packages where missing dependencies or conflicts can happen. A user friendly approach should choose the minimal combination of packages where this is no solution.
 
 Second, as conflicts or missing dependencies can happen very deep in the graph, just reporting these errors will confuse end users, as these packages are not directly required by the root package. A friendly error report should relate the missing dependencies or conflicts to the root dependencies.
 
-From the logical point view, the first problem is equivalent to find the minimal subset $T$ of the total formulas $S$ that cannot be satisfied altogether. This subset of formulas is also called MUS(\emph{minimal unsatisfiable subformula}). Formally, $T$ is MUS of $S$ if and only if $T \subseteq S$, $T \vDash \perp$ and $\nexists R \subset T \wedge R \vDash \perp$.
+From the logical point view, the first problem is equivalent to find the minimal subset $T$ of the total formulas $S$ that cannot be satisfied altogether\footnote{The interpretation of the set of total formuals is the conjunction of each formula, i.e. \emph{conjunctive normal form}.}. This subset of formulas is also called MUS(\emph{minimal unsatisfiable subformula}). Formally, $T$ is MUS of $S$ if and only if $T \subseteq S$, $T \vDash \perp$ and $\nexists R \subset T \wedge R \vDash \perp$. An elegant algorithm to compute MUS is QuickXplain\cite{junker2004quickxplain}. The algorithm has the merit that it doesn't require any change to the SAT solver. A tailored version of this algorithm is implemented in SAT4J, on which our implementation is based.
 
-An elegant algorithm to compute MUS is QuickXplain\cite{junker2004quickxplain}. The algorithm has the merit that it doesn't require any change to the SAT solver. QuickXplain works by translate the constraints $S = \{ s_1, ..., s_n\}$ into $S'$ by adding a new selector variable $sel_i$ to each constraint in $S: S' = \{ sel_1 \vee s_1, ..., sel_n \vee s_n\}$. Then the problem is transformed into a pseudo-boolean problem to minimize the objective function $\sum_{1 \leq i \leq n} sel_i$ under the constraint $S' \bigwedge_{1 \leq i \leq n} \neg sel_i$, which can be readily solved by existent SAT solvers.
+% QuickXplain works by translate the constraints $S = \{ s_1, ..., s_n\}$ into $S'$ by adding a new selector variable $sel_i$ to each constraint in $S: S' = \{ sel_1 \vee s_1, ..., sel_n \vee s_n\}$. By checking the satisfiability of $S' \bigwedge_{1 \leq i \leq n} \neg sel_i$, the QuickXplain algorithm can make use of the selector variables to enable/disable constraints in order to compute the MUS.
+
+% Then the problem is transformed into a pseudo-boolean problem to minimize the objective function $\sum_{1 \leq i \leq n} sel_i$ under the constraint $S' \bigwedge_{1 \leq i \leq n} \neg sel_i$, which can be readily solved by existent SAT solvers.
 
 To deal with the second requirement, we need to relate each translated logical formula to the original dependency in the repository. When the SAT solver produces MUS, we are sure that the dependencies that correspond to the formulas must form paths from the root package to the place where missing dependencies or conflicts happen. Otherwise, it's possible to show the the set of unsatisfiable subformula is not minimal, which is a contradiction.
 
