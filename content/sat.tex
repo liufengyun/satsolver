@@ -7,7 +7,7 @@ In this section, I'll describe in detail how the new algorithm works. The resolu
 \item An algorithm to use an SAT solver to find an optimal solution on the local repository.
 \end{enumerate}
 
-The first algorithm, which I call the \emph{closure construction algorithm}, recursively constructs a repository whose packages are the transitive closure of the initial constraints. In the process of constructing the local repository, it has to handle particular features of Maven and Ivy, such as \emph{fuzzy constraints}, \emph{excludes}, \emph{intransitive dependencies}, \emph{forces}, \emph{scopes} or \emph{configurations}. We need two versions of the algorithm here, one for Maven and one for Ivy, to handle their differences.
+The first algorithm, which I call the \emph{construction algorithm}, recursively constructs a repository whose packages are the transitive closure of the initial constraints. In the process of constructing the local repository, it has to handle particular features of Maven and Ivy, such as \emph{fuzzy constraints}, \emph{excludes}, \emph{intransitive dependencies}, \emph{forces}, \emph{scopes} or \emph{configurations}. We need two versions of the algorithm here, one for Maven and one for Ivy, to handle their differences.
 
 The second algorithm, which I call the \emph{encoding algorithm}, encodes the local repository to the format of a specific SAT solver, and decodes the result to a user-friendly format. Thanks to the abstraction in our implementation, we only need one version of this algorithm.
 
@@ -60,9 +60,9 @@ Now we can formalize the concept \emph{resolution}.
 
 Note that a resolution may not always exist. There could be conflicts or missing dependencies. In the following, I use \emph{root package} as a synonym of \emph{initial package}, and \emph{root dependencies} means the dependencies of the root package.
 
-\subsection{Closure Construction Algorithm}
+\subsection{Construction Algorithm}
 
-The closure construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository of the root package, which are defined as follows.
+The construction algorithm is basically a depth-first-search(DFS) algorithm on the \emph{flattened dependency graph} of the closure repository of the root package, which are defined as follows.
 
 \begin{definition}[Closure Repository]
   The closure repository for a package $\pi$ with regard to a repository $R = (P, D, C)$ is a sub-repository $R' = (P', D', C')$, where the packages in the repository are the transitive closure of the dependencies of the package $\pi$. Formally, $\pi \in P'$, and $\forall p \in P$, $\exists q \in P'\land \exists d_i \in D(q) \land p \in d_i \rightarrow p \in P'$. $D'$ and $C'$ are defined based on $P'$:
@@ -117,7 +117,7 @@ The algorithm starts from the root package, and advances following the depth-fir
 
 Compared to the repository triple $R = (P, D, C)$, the structure $packagesMap$ is the representation of the dependency function $D$, and as $P$ is the domain of $D$, thus is represented by the keys of $packagesMap$. The structure $librariesMap$ is a representation of conflicts $C$. Additional information is maintained in $packagesMap$ for more detailed resolution report.
 
-In the following, I'm going to introduce in detail how the particular features of Maven or Ivy are handled by the \emph{closure construction algorithm}.
+In the following, I'm going to introduce in detail how the particular features of Maven or Ivy are handled by the \emph{construction algorithm}.
 
 \subsubsection{Fuzzy Constraints}
 
@@ -176,7 +176,7 @@ For Ivy, the new configurations are calculated for each dependency according to 
 
 \label{sat:excludes}
 
-Both Maven and Ivy support excludes in dependency. This feature complicates the \emph{closure construction algorithm}. Ideally, each package in the \emph{flatten dependency graph} is visited once. However, the effective scope of excludes is along the transitive chain, it's possible that for a dependency $d$ of a package $\pi$, it's excluded in one chain, but included in another chain. This is illustrated by following example:
+Both Maven and Ivy support excludes in dependency. This feature complicates the \emph{construction algorithm}. Ideally, each package in the \emph{flatten dependency graph} is visited once. However, the effective scope of excludes is along the transitive chain, it's possible that for a dependency $d$ of a package $\pi$, it's excluded in one chain, but included in another chain. This is illustrated by following example:
 
 \begin{verbatim}
 p   depends on(exclude=t)   h(deps={t(>2.1)})
@@ -321,10 +321,16 @@ From the logical point view, the first problem is equivalent to find the minimal
 
 To deal with the second requirement, we need to relate each translated logical formula to the original dependency in the repository. When the SAT solver produces MUS, we are sure that the dependencies that correspond to the formulas must form paths from the root package to the place where missing dependencies or conflicts happen. Otherwise, it's possible to show the the set of unsatisfiable subformula is not minimal, which is a contradiction.
 
-Based on this observation, we are able to display the missing dependencies or conflicts as a tree from the root package to the level where the error happens, which makes it clear to end users how the root dependencies lead to the error transitively.
+Based on this observation, we are able to reconstruct the path from the MUS and display the missing dependencies or conflicts as a tree from the root package to the level where the error happens, which makes it clear to end users how the root dependencies lead to the error transitively.
 
 \subsection{Performance}
 
-For the POM and Ivy files we tested, the SAT resolver never takes more than one second. The largest POM file we tested has 46 packages in the solution set, and it took 0.17 second on SAT solver, 68.4 seconds in downloading POM files. With local file system caching of POM files, the cost of network IO drops quickly after the first run on the project.
+The performance of the algorithm is determined by the \emph{construction algorithm} and \emph{encoding algorithm} respectively.
+
+For the POM and Ivy files we tested, the \emph{construction algorithm} takes 2 to 100 seconds. Most of the time was spent on downloading artifact specifications. The cost of network IO drops quickly with caching. However, its worst performance is potentially exponential due to the path-sensitive features.
+
+The encoding algorithm never takes more than 1 second in our experiment. Theoretically, SAT is NP-Complete, but it works well in practice.
+
+The largest POM file we tested has 46 packages in the solution set, the construction algorithm took 68.4 seconds, and the encoding algorithm took 0.17 second.
 
 % When all the POM and Ivy files are cached locally, the new algorithm is about 30 times faster than Maven and Ivy.

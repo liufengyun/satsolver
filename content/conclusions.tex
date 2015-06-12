@@ -8,7 +8,7 @@ Our project has shown that usage of SAT solvers for dependency management is not
 
 As we've seen, in the new resolution algorithm, the time spent on network IO is dominating, the time spent on SAT solver is insignificant. If the POM or Ivy files are local, the algorithm would be extremely fast.
 
-This implies we can use a central server for dependency resolution. The client sends the dependency specification to the server, the algorithm runs and sends the resolution result back to the client. The client only needs to download artifacts from repositories.
+This implies we can use a central server for dependency resolution. The client sends the dependency specification to the server, the server does dependency resolution and sends the result back to the client. The client only needs to download artifacts from repositories. The rationale behind this is that when it's expensive to move data to computation, it's reasonable to move computation to data.
 
 In the process of resolving dependency, the server downloads POM or Ivy files from repositories and cache them locally. The more POM and Ivy files the server caches, the faster the server will be.
 
